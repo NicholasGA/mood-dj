@@ -208,6 +208,49 @@ ipcMain.handle('qq-get-lyric', async (_e, songmid) => {
   }
 })
 
+// ── 用户收藏：取"我喜欢"等歌单 + 高频歌手 + 样本曲（需登录态，走主进程）──
+ipcMain.handle('qq-get-favorites', async () => {
+  try {
+    const session = mainWindow.webContents.session
+    const allCookies = await session.cookies.get({})
+    const uin = resolveUin(allCookies)
+    if (uin === '0') return null
+    const cookieHeader = allCookies.filter(c => c.domain?.includes('qq.com')).map(c => `${c.name}=${c.value}`).join('; ')
+    const headers = { 'Referer': 'https://y.qq.com/', 'User-Agent': 'Mozilla/5.0', 'Cookie': cookieHeader }
+    const keyst = allCookies.find(c => c.name === 'qm_keyst')?.value || allCookies.find(c => c.name === 'qqmusic_key')?.value || ''
+    let g_tk = 5381; for (let i = 0; i < keyst.length; i++) g_tk += (g_tk << 5) + keyst.charCodeAt(i); g_tk &= 2147483647
+
+    // 1) 用户歌单列表
+    const listUrl = `https://c.y.qq.com/rsc/fcgi-bin/fcg_user_created_diss?hostuin=${uin}&sin=0&size=50&g_tk=${g_tk}&format=json&inCharset=utf8&outCharset=utf-8&notice=0&platform=yqq&needNewCode=0`
+    const lr = await net.fetch(listUrl, { headers })
+    const lj = await lr.json()
+    const disslist = (lj.data?.disslist || []).filter(d => d.tid && d.song_cnt > 0)
+    if (!disslist.length) { dlog('[fav] 无歌单'); return null }
+    disslist.sort((a, b) => (b.diss_name === '我喜欢') - (a.diss_name === '我喜欢') || (b.song_cnt - a.song_cnt))
+    const playlistIds = disslist.slice(0, 5).map(d => String(d.tid))
+    const fav = disslist.find(d => d.diss_name === '我喜欢') || disslist[0]
+
+    // 2) 从"我喜欢"随机抽一段做口味样本
+    const begin = Math.max(0, Math.floor(Math.random() * Math.max(1, fav.song_cnt - 80)))
+    const body = JSON.stringify({
+      comm: { ct: 19, cv: 1859, uin, format: 'json' },
+      req_1: { module: 'music.srfDissInfo.aiDissInfo', method: 'uniform_get_Dissinfo', param: { disstid: Number(fav.tid), tag: 1, userinfo: 0, song_begin: begin, song_num: 80 } },
+    })
+    const sr = await net.fetch('https://u.y.qq.com/cgi-bin/musicu.fcg', { method: 'POST', headers: { ...headers, 'Content-Type': 'application/json' }, body })
+    const songs = (await sr.json()).req_1?.data?.songlist || []
+    const sample = songs.filter(s => s.mid).map(s => ({
+      id: String(s.id ?? s.mid), mid: s.mid, media_mid: s.file?.media_mid || s.mid, name: s.name,
+      artists: (s.singer || []).map(a => ({ name: a.name })),
+      album: { name: s.album?.name, images: s.album?.mid ? [{ url: `https://y.gtimg.cn/music/photo_new/T002R300x300M000${s.album.mid}.jpg` }] : [] },
+      duration_ms: (s.interval || 0) * 1000, uri: `qqmusic:${s.mid}`,
+    }))
+    const af = {}; sample.forEach(t => t.artists.forEach(a => { af[a.name] = (af[a.name] || 0) + 1 }))
+    const topArtists = Object.entries(af).sort((a, b) => b[1] - a[1]).slice(0, 12).map(([n]) => n)
+    dlog('[fav] 歌单', playlistIds.length, '| 我喜欢', fav.song_cnt, '首 | 样本', sample.length, '| 高频', topArtists.slice(0, 5).join(','))
+    return { playlistIds, topArtists, sample, favCount: fav.song_cnt }
+  } catch (e) { dlog('[fav] error', e.message); return null }
+})
+
 // ── Token / cookie persistence ─────────────────────────────────────
 const dataDir  = () => app.getPath('userData')
 const qqFile    = () => path.join(dataDir(), 'mooddj-qq.json')

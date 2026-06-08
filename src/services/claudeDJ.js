@@ -78,22 +78,25 @@ export async function analyzeMood(text, energy, valence, platform = 'qq') {
   return cfg
 }
 
-// AI 精排：从候选池里按心情/能量/情绪挑选并排序，剔除不搭的歌
-export async function curateTracks(tracks, moodConfig, energy, valence) {
+// AI 精排：从候选池里按心情/能量/情绪挑选并排序，剔除不搭的歌；favArtists 偏向用户口味
+export async function curateTracks(tracks, moodConfig, energy, valence, favArtists = []) {
   const pool = tracks.slice(0, 45)
   if (pool.length < 6) return tracks  // 池子太小没必要精排
   const numbered = pool
     .map((t, i) => `${i + 1}. ${t.name} - ${t.artists?.map(a => a.name).join('/') || '未知'}`)
     .join('\n')
-  const system = `你是资深电台选歌人，擅长按心情精准排歌单。只输出JSON，不要解释。`
+  const tasteLine = favArtists.length
+    ? `\n用户偏爱的歌手/风格：${favArtists.slice(0, 10).join('、')}。在贴合心情的前提下，优先挑选这些歌手或风格相近的歌。`
+    : ''
+  const system = `你是资深电台选歌人，擅长按心情和听众口味精准排歌单。只输出JSON，不要解释。`
   const raw = await gemini(system, `
 听众心情：${moodConfig?.mood_name || '未知'}
-能量值 ${energy}（0放松-1亢奋）　情绪值 ${valence}（0低落-1愉悦）
+能量值 ${energy}（0放松-1亢奋）　情绪值 ${valence}（0低落-1愉悦）${tasteLine}
 
 候选歌曲（编号. 歌名 - 歌手）：
 ${numbered}
 
-任务：挑出最贴合该心情/能量/情绪的歌，剔除明显不搭的（如低落心情里的蹦迪神曲、放松心情里的硬核摇滚），按适合电台连续收听的流畅顺序排列，尽量 15-25 首。
+任务：挑出最贴合该心情/能量/情绪、并尽量符合用户口味的歌，剔除明显不搭的（如低落心情里的蹦迪神曲、放松心情里的硬核摇滚），按适合电台连续收听的流畅顺序排列，尽量 15-25 首。
 返回JSON：{"order":[编号,编号,...]}`, { retries: 1, maxTokens: 900, temperature: 0.7 })
 
   const m = raw.match(/\{[\s\S]*\}/)

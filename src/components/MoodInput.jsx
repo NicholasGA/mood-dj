@@ -1,4 +1,23 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+
+// 按当前时段 + 工作日/周末给出情境推荐
+function getContextSuggestion(d = new Date()) {
+  const h = d.getHours()
+  const weekend = d.getDay() === 0 || d.getDay() === 6
+  if (h >= 5 && h < 8)   return { emoji: '🌅', when: '清晨', text: '清晨刚醒，来点温柔唤醒的音乐', energy: 0.45, valence: 0.7 }
+  if (h >= 8 && h < 11)  return weekend
+    ? { emoji: '☕', when: '周末上午', text: '悠闲的周末上午，来点轻松惬意的', energy: 0.45, valence: 0.72 }
+    : { emoji: '⚡', when: '上午', text: '上午开工，来点提神有活力的', energy: 0.62, valence: 0.65 }
+  if (h >= 11 && h < 14) return { emoji: '🍱', when: '午间', text: '午休时间，来点放松慵懒的', energy: 0.4, valence: 0.6 }
+  if (h >= 14 && h < 18) return weekend
+    ? { emoji: '🛋️', when: '周末午后', text: '慵懒的周末午后，随便听点舒服的', energy: 0.4, valence: 0.66 }
+    : { emoji: '🎯', when: '下午', text: '下午继续，来点专注的背景音乐', energy: 0.45, valence: 0.55 }
+  if (h >= 18 && h < 21) return { emoji: '🌆', when: '傍晚', text: '忙完一天，来点放松治愈的', energy: 0.4, valence: 0.6 }
+  if (h >= 21 && h < 24) return weekend
+    ? { emoji: '🌃', when: '周末夜晚', text: '周末夜晚，来点微醺有氛围的', energy: 0.5, valence: 0.6 }
+    : { emoji: '🌙', when: '夜晚', text: '夜深了，来点安静抒情的', energy: 0.35, valence: 0.5 }
+  return { emoji: '😴', when: '深夜', text: '深夜了，来点安静助眠的 lofi', energy: 0.2, valence: 0.45 }
+}
 
 const PRESET_MOODS = [
   { label: '开心', emoji: '😄', text: '今天很开心，想听轻快的音乐', energy: 0.65, valence: 0.85 },
@@ -13,6 +32,14 @@ export default function MoodInput({ onStart, isLoading, isActive, moodConfig }) 
   const [text, setText] = useState('')
   const [energy, setEnergy] = useState(0.5)
   const [valence, setValence] = useState(0.5)
+  const [now, setNow] = useState(() => new Date())
+
+  // 每 5 分钟刷新一次，跨时段时推荐随之更新
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 5 * 60 * 1000)
+    return () => clearInterval(t)
+  }, [])
+  const sug = getContextSuggestion(now)
 
   function applyPreset(p) {
     setText(p.text)
@@ -30,6 +57,19 @@ export default function MoodInput({ onStart, isLoading, isActive, moodConfig }) 
   return (
     <div style={styles.panel}>
       <h2 style={styles.heading}>今日心情</h2>
+
+      <div style={{ ...styles.suggest, borderColor: `${accent}55`, background: `linear-gradient(120deg, ${accent}22, rgba(255,255,255,0.03))` }}>
+        <span style={styles.suggestEmoji}>{sug.emoji}</span>
+        <div style={styles.suggestBody}>
+          <div style={styles.suggestLabel}>情境推荐 · {sug.when}</div>
+          <div style={styles.suggestText}>{sug.text}</div>
+        </div>
+        <button
+          style={{ ...styles.suggestBtn, background: accent, opacity: isLoading ? 0.5 : 1 }}
+          onClick={() => !isLoading && onStart(sug.text, sug.energy, sug.valence)}
+          disabled={isLoading}
+        >▶ 就这个</button>
+      </div>
 
       <div style={styles.presets}>
         {PRESET_MOODS.map(p => (
@@ -106,6 +146,12 @@ const styles = {
     padding: 24, display: 'flex', flexDirection: 'column', gap: 16,
   },
   heading: { fontSize: 18, fontWeight: 700, color: '#f9fafb', margin: 0 },
+  suggest: { display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px', borderRadius: 14, border: '1px solid' },
+  suggestEmoji: { fontSize: 24, flexShrink: 0 },
+  suggestBody: { flex: 1, minWidth: 0 },
+  suggestLabel: { fontSize: 11, color: '#9ca3af', marginBottom: 2, letterSpacing: 0.5 },
+  suggestText: { fontSize: 13, color: '#f3f4f6', fontWeight: 500, lineHeight: 1.3 },
+  suggestBtn: { flexShrink: 0, padding: '8px 12px', borderRadius: 10, border: 'none', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' },
   presets: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 },
   preset: {
     background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)',

@@ -22,6 +22,7 @@ export default function App() {
   const [albumColors, setAlbumColors] = useState(null)
   const [lyric, setLyric] = useState({ lines: [], choruses: [], hasTrans: false })
   const [miniMode, setMiniMode] = useState(false)
+  const [favCount, setFavCount] = useState(0)   // 已接入的收藏数（仅用于 UI 提示）
   const [error, setError] = useState('')
 
   const audioRef = useRef(new Audio())
@@ -34,6 +35,7 @@ export default function App() {
   const analyserRef = useRef(null)
   const radioRef = useRef(null)        // 当前电台上下文：{ queries, playlistIds, seen }，用于无限补歌
   const replenishPromiseRef = useRef(null)   // 进行中的补歌 promise（合并并发调用，避免竞态）
+  const favRef = useRef(null)          // 用户收藏：{ playlistIds, topArtists, sample, favCount }
 
   // 懒初始化 Web Audio 分析器（只能对一个 <audio> 创建一次 source）
   const ensureAnalyser = useCallback(() => {
@@ -61,6 +63,17 @@ export default function App() {
   useEffect(() => {
     window.electronAPI.getQQCookies().then(c => { if (c?.length) setQQCookies(c) })
   }, [])
+
+  // 登录后拉取用户收藏（"我喜欢"等），用于个性化推荐
+  useEffect(() => {
+    if (!qqCookies) { favRef.current = null; setFavCount(0); return }
+    window.electronAPI.getQQFavorites().then(f => {
+      if (f && (f.sample?.length || f.playlistIds?.length)) {
+        favRef.current = f
+        setFavCount(f.favCount || f.sample?.length || 0)
+      }
+    }).catch(() => {})
+  }, [qqCookies])
 
   // 当前歌曲变化时，从封面提取主题色（失败则回退心情色）
   useEffect(() => {
@@ -285,19 +298,28 @@ export default function App() {
       setShowAnnouncement(true)
       setTimeout(() => setShowAnnouncement(false), 6000)
 
-      const queries = config.search_queries || []
+      // 个性化：把常听歌手并入搜索词，让选歌带上你的口味
+      const fav = favRef.current
+      const favArtists = fav?.topArtists || []
+      const artistQueries = favArtists.slice(0, 6).sort(() => Math.random() - 0.5).slice(0, 2)
+      const queries = [...(config.search_queries || []), ...artistQueries]
+
       const allTracks = [], seen = new Set()
       const add = (arr) => { for (const t of arr || []) if (t?.mid && !seen.has(t.mid)) { seen.add(t.mid); allTracks.push(t) } }
       const ok = (results) => results.forEach(r => r.status === 'fulfilled' && add(r.value))
+
+      // 0) 收藏样本直接进池（AI 精排会按心情筛）
+      if (fav?.sample?.length) add(fav.sample)
 
       // 1) 单曲搜索（并发，随机翻页，每次都不一样）
       ok(await Promise.allSettled(queries.map(q => searchTracks(qqCookies, q, 15, 1 + Math.floor(Math.random() * 4)))))
 
       // 2) 歌单源（并发）：搜人工歌单 → 挑歌量充足的几个 → 捞歌进池
-      const plLists = await Promise.allSettled(queries.slice(0, 2).map(q => searchPlaylists(qqCookies, q, 6)))
+      const plLists = await Promise.allSettled((config.search_queries || []).slice(0, 2).map(q => searchPlaylists(qqCookies, q, 6)))
       const picked = []
       plLists.forEach(r => r.status === 'fulfilled' && r.value.slice(0, 3).forEach(p => { if (!picked.includes(p.id)) picked.push(p.id) }))
-      const playlistIds = picked.slice(0, 4)
+      // 3) 你的收藏歌单也并入来源（无限补歌时会从你的收藏里继续捞）
+      const playlistIds = [...picked.slice(0, 4), ...(fav?.playlistIds || []).slice(0, 3)]
       ok(await Promise.allSettled(playlistIds.map(id => getPlaylistTracks(qqCookies, id, 50))))
 
       if (allTracks.length === 0) throw new Error('未找到匹配曲目，请换个描述')
@@ -305,9 +327,9 @@ export default function App() {
       // 存电台上下文，供无限补歌复用
       radioRef.current = { queries, playlistIds, seen }
 
-      // AI 精排：按心情挑选+排序（精排只看前若干首）；其余作为后续曲库
+      // AI 精排：按心情 + 你的口味挑选排序；失败则回退随机洗牌
       try {
-        shuffled = await curateTracks(allTracks, config, energy, valence)
+        shuffled = await curateTracks(allTracks, config, energy, valence, favArtists)
       } catch {
         shuffled = allTracks.sort(() => Math.random() - 0.5)
       }
@@ -369,6 +391,7 @@ export default function App() {
       <div style={styles.titleBar}>
         <span style={styles.appName}>Mood DJ {moodConfig?.mood_emoji || '🎵'}</span>
         {moodConfig && <span style={{ ...styles.tag, background: `${accent}33`, color: accent }}>{moodConfig.mood_name}</span>}
+        {favCount > 0 && <span style={styles.favTag} title="已接入你的 QQ音乐收藏，推荐会参考你的口味">❤️ 收藏 {favCount}</span>}
         <div style={styles.winCtrl}>
           <span style={styles.user} onClick={logout} title="退出登录">QQ音乐 ✕</span>
           <button style={styles.wBtn} onClick={() => toggleMini(true)} title="迷你播放器（置顶小窗）">▭</button>
@@ -409,6 +432,7 @@ const styles = {
   titleBar: { height: 40, display: 'flex', alignItems: 'center', padding: '0 16px', gap: 12, flexShrink: 0, background: 'rgba(10,10,10,0.85)', backdropFilter: 'blur(12px)', borderBottom: '1px solid rgba(255,255,255,0.06)', zIndex: 50, WebkitAppRegion: 'drag', userSelect: 'none' },
   appName: { fontSize: 14, fontWeight: 700 },
   tag: { fontSize: 11, padding: '2px 10px', borderRadius: 20, fontWeight: 500 },
+  favTag: { fontSize: 11, padding: '2px 10px', borderRadius: 20, fontWeight: 500, background: 'rgba(244,114,182,0.15)', color: '#f9a8d4' },
   winCtrl: { marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 4, WebkitAppRegion: 'no-drag' },
   user: { fontSize: 12, color: '#6b7280', marginRight: 8, cursor: 'pointer' },
   wBtn: { width: 28, height: 22, background: 'rgba(255,255,255,0.07)', border: 'none', color: '#9ca3af', fontSize: 11, cursor: 'pointer', borderRadius: 4 },
