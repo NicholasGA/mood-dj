@@ -451,8 +451,9 @@ export default function App() {
       mem.likedTracks.push({ id: cur.id, mid: cur.mid, media_mid: cur.media_mid, name: cur.name, artists: cur.artists, album: cur.album })
       saveMemory()
     }
-    showToast('❤️ 已收藏')
-    if (cur.id) window.electronAPI.addQQFavorite(Number(cur.id)).then(ok => { if (!ok) showToast('❤️ 已记住（QQ 同步失败）') })
+    showToast('❤️ 已收藏')   // 本地记忆一定成功（喂个性化推荐）
+    // QQ"我喜欢"同步best-effort：很多歌(尤其日文/灰色)QQ接口会拒(80105)，成了就提示，没成不打扰
+    if (cur.id) window.electronAPI.addQQFavorite(Number(cur.id)).then(ok => { if (ok) showToast('❤️ 已同步到 QQ 我喜欢') }).catch(() => {})
   }
 
   // 从喜欢的歌里统计常听歌手，作为口味信号
