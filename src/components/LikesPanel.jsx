@@ -1,11 +1,12 @@
 import { useState } from 'react'
 import Icon from './Icon'
 
-export default function LikesPanel({ likedTracks, accent = '#f472b6', onClose, onPlayTrack, onRemove, onPlayGroup, onGenProfile, onGenGroups, initialProfile = null, initialGroups = null }) {
+export default function LikesPanel({ likedTracks, accent = '#f472b6', onClose, onPlayTrack, onRemove, onPlayGroup, onGenProfile, onGenGroups, onSyncQQ, initialProfile = null, initialGroups = null }) {
   const [profile, setProfile] = useState(initialProfile)
   const [profileLoading, setProfileLoading] = useState(false)
   const [groups, setGroups] = useState(initialGroups)
   const [groupsLoading, setGroupsLoading] = useState(false)
+  const [syncing, setSyncing] = useState(false)
   const [err, setErr] = useState('')
 
   const n = likedTracks.length
@@ -44,6 +45,11 @@ export default function LikesPanel({ likedTracks, accent = '#f472b6', onClose, o
           <button style={s.action} onClick={genGroups} disabled={groupsLoading}>
             <Icon name="layers" size={13} color="#cbd5e1" /> {groupsLoading ? '分组中…' : '自动分组'}
           </button>
+          {onSyncQQ && (
+            <button style={s.action} onClick={async () => { setSyncing(true); try { await onSyncQQ() } finally { setSyncing(false) } }} disabled={syncing} title="把本地喜欢推送到 QQ 我喜欢（灰色歌会跳过）">
+              <Icon name="refresh" size={13} color="#cbd5e1" /> {syncing ? '同步中…' : '同步到 QQ'}
+            </button>
+          )}
         </div>
         <div style={s.hintLine}>你喜欢的歌 = DJ 的记忆：它会按你的口味挑歌，还在串场里跟你聊你的喜好</div>
         {err && <div style={s.err}>{err}</div>}

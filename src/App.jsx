@@ -500,8 +500,22 @@ export default function App() {
       setLikedCount(mem.likedTracks.length)
     }
     showToast('❤️ 已加入「我喜欢的」')   // 本地一定成功，可随时在喜欢列表重听
-    // QQ"我喜欢"同步best-effort：很多歌(尤其日文/灰色)QQ接口会拒(80105)，成了就提示，没成不打扰
+    // QQ"我喜欢"同步best-effort：QQ 库里有的歌(含多数外文)能成，真·灰色歌(80105)会跳过
     if (cur.id) window.electronAPI.addQQFavorite(Number(cur.id)).then(ok => { if (ok) showToast('❤️ 已同步到 QQ 我喜欢') }).catch(() => {})
+  }
+
+  // 一键把本地「喜欢」批量同步到 QQ 我喜欢：QQ 库里有的会成，灰色歌跳过；逐首限速避免限流
+  async function syncLikesToQQ() {
+    const likes = memoryRef.current.likedTracks.filter(t => t.id)
+    if (!likes.length) { showToast('还没有可同步的喜欢'); return }
+    showToast(`⏳ 正在同步 ${likes.length} 首到 QQ 我喜欢…`)
+    let ok = 0, fail = 0
+    for (const t of likes) {
+      try { (await window.electronAPI.addQQFavorite(Number(t.id))) ? ok++ : fail++ }
+      catch { fail++ }
+      await new Promise(r => setTimeout(r, 280))
+    }
+    showToast(fail ? `✅ 同步 ${ok} 首；${fail} 首 QQ 库里没有，已跳过` : `✅ ${ok} 首已同步到 QQ 我喜欢`)
   }
 
   // 从喜欢的歌里统计常听歌手，作为口味信号
@@ -710,6 +724,7 @@ export default function App() {
           onPlayTrack={playLiked}
           onRemove={removeLiked}
           onPlayGroup={playGroup}
+          onSyncQQ={syncLikesToQQ}
           onGenProfile={getLikesProfile}
           onGenGroups={getLikesGroups}
           initialProfile={memoryRef.current.likesCache?.profileSig === likesSig() ? memoryRef.current.likesCache.profile : null}
