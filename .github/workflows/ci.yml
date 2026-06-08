@@ -15,6 +15,7 @@ jobs:
         with:
           node-version: 20
           cache: npm
-      - run: npm ci
+      # 用 npm install（非 npm ci）：对 lockfile 不完整/跨 npm 版本解析差异更稳，CI 只作 build+test 闸门
+      - run: npm install --no-audit --no-fund
       - run: npm run build
       - run: npm test
