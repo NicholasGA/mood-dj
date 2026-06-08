@@ -1,10 +1,18 @@
-// 多 key 轮换：VITE_GEMINI_API_KEY 支持逗号分隔多个 key（各自独立配额）
-const GEMINI_KEYS = (import.meta.env.VITE_GEMINI_API_KEY || '').split(',').map(s => s.trim()).filter(Boolean)
-// gemini-2.5-flash 免费层仅 20 次/天；2.5-flash-lite 免费日配额高得多且够用
-const MODEL = import.meta.env.VITE_GEMINI_MODEL || 'gemini-2.5-flash-lite'
-// 可选备用 Provider：OpenRouter（OpenAI 兼容，有免费模型）。所有 Gemini key 都限流后兜底
-const OPENROUTER_KEY = import.meta.env.VITE_OPENROUTER_API_KEY
-const OPENROUTER_MODEL = import.meta.env.VITE_OPENROUTER_MODEL || 'meta-llama/llama-3.3-70b-instruct:free'
+// 运行时可配置（打包分发后由用户在应用内填写）；.env 仅作开发默认值
+const splitKeys = (s) => (s || '').split(',').map(x => x.trim()).filter(Boolean)
+let GEMINI_KEYS = splitKeys(import.meta.env.VITE_GEMINI_API_KEY)
+let MODEL = import.meta.env.VITE_GEMINI_MODEL || 'gemini-2.5-flash-lite'
+let OPENROUTER_KEY = import.meta.env.VITE_OPENROUTER_API_KEY || ''
+let OPENROUTER_MODEL = import.meta.env.VITE_OPENROUTER_MODEL || 'meta-llama/llama-3.3-70b-instruct:free'
+
+// 应用启动时用持久化配置覆盖
+export function configureLLM(cfg = {}) {
+  if (cfg.geminiKey != null) GEMINI_KEYS = splitKeys(cfg.geminiKey)
+  if (cfg.geminiModel) MODEL = cfg.geminiModel
+  if (cfg.openrouterKey != null) OPENROUTER_KEY = cfg.openrouterKey.trim()
+  if (cfg.openrouterModel) OPENROUTER_MODEL = cfg.openrouterModel
+}
+export function hasLLMKey() { return GEMINI_KEYS.length > 0 || !!OPENROUTER_KEY }
 
 const KEY_COOLDOWN_MS = 30 * 60 * 1000   // 某 key 限流后冷却 30 分钟再试
 const keyCooldown = new Map()            // key -> 冷却截止时间戳

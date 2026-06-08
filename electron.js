@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, net, protocol, screen } = require('electron')
+const { app, BrowserWindow, ipcMain, net, protocol, screen, shell } = require('electron')
 const path = require('path')
 const fs = require('fs')
 
@@ -285,6 +285,16 @@ ipcMain.handle('store-qq-cookies',(_e, v) => writeJson(qqFile(), v))
 ipcMain.handle('clear-qq-cookies',() => { try { fs.unlinkSync(qqFile()) } catch {} })
 ipcMain.handle('get-memory',      () => readJson(memFile()))
 ipcMain.handle('store-memory',    (_e, v) => writeJson(memFile(), v))
+
+// ── 应用配置（API key 等，打包分发后由用户在应用内填写）─────────────
+const cfgFile = () => path.join(dataDir(), 'mooddj-config.json')
+ipcMain.handle('get-config',   () => readJson(cfgFile()))
+ipcMain.handle('store-config', (_e, v) => writeJson(cfgFile(), v))
+
+// ── 用默认浏览器打开外链（教程/获取 key 跳转）─────────────────────
+ipcMain.handle('open-external', (_e, url) => {
+  if (typeof url === 'string' && /^https?:\/\//.test(url)) shell.openExternal(url)
+})
 
 // ── Window controls ───────────────────────────────────────────────
 ipcMain.on('win-minimize', () => mainWindow.minimize())

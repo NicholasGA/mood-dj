@@ -1,12 +1,12 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import AuthScreen from './components/AuthScreen'
+import Onboarding from './components/Onboarding'
 import MoodInput from './components/MoodInput'
 import NowPlaying from './components/NowPlaying'
 import Visualizer from './components/Visualizer'
 import DJAnnouncement from './components/DJAnnouncement'
 import MiniPlayer from './components/MiniPlayer'
 import { searchTracks, getSongUrl, getLyric, searchPlaylists, getPlaylistTracks, searchByArtist } from './services/qqMusicApi'
-import { analyzeMood, generateAnnouncement, curateTracks, interpretRequest } from './services/claudeDJ'
+import { analyzeMood, generateAnnouncement, curateTracks, interpretRequest, configureLLM, hasLLMKey } from './services/claudeDJ'
 import { extractAlbumColors } from './services/albumColor'
 
 export default function App() {
@@ -23,6 +23,8 @@ export default function App() {
   const [lyric, setLyric] = useState({ lines: [], choruses: [], hasTrans: false })
   const [miniMode, setMiniMode] = useState(false)
   const [favCount, setFavCount] = useState(0)   // 已接入的收藏数（仅用于 UI 提示）
+  const [llmReady, setLlmReady] = useState(hasLLMKey())  // 是否已配置 AI key
+  const [showSetup, setShowSetup] = useState(false)      // 手动重开设置/引导
   const [toast, setToast] = useState('')
   const [error, setError] = useState('')
   const toastTimer = useRef(null)
@@ -78,6 +80,14 @@ export default function App() {
     window.electronAPI.getMemory().then(m => {
       if (m) memoryRef.current = { likedTracks: m.likedTracks || [], dislikedArtists: m.dislikedArtists || [] }
     }).catch(() => {})
+  }, [])
+
+  // 载入应用配置（API key 等），覆盖默认值
+  useEffect(() => {
+    window.electronAPI.getConfig().then(cfg => {
+      if (cfg) configureLLM(cfg)
+      setLlmReady(hasLLMKey())
+    }).catch(() => setLlmReady(hasLLMKey()))
   }, [])
 
   // 登录后拉取用户收藏（"我喜欢"等），用于个性化推荐
@@ -503,8 +513,17 @@ export default function App() {
     setQQCookies(null); setCurrentTrack(null); setQueue([]); setMoodConfig(null)
   }
 
-  if (!qqCookies) {
-    return <AuthScreen onQQAuth={setQQCookies} />
+  // 未连接 QQ 或未配置 AI key → 引导页；也可从设置手动重开
+  if (!qqCookies || !llmReady || showSetup) {
+    return (
+      <Onboarding
+        qqCookies={qqCookies}
+        onQQAuth={setQQCookies}
+        onReady={() => setLlmReady(true)}
+        onClose={() => setShowSetup(false)}
+        canClose={!!qqCookies && llmReady}
+      />
+    )
   }
 
   // 优先用当前封面主题色（每首歌不同），无则回退心情色
@@ -536,6 +555,7 @@ export default function App() {
         {favCount > 0 && <span style={styles.favTag} title="已接入你的 QQ音乐收藏，推荐会参考你的口味">❤️ 收藏 {favCount}</span>}
         <div style={styles.winCtrl}>
           <span style={styles.user} onClick={logout} title="退出登录">QQ音乐 ✕</span>
+          <button style={styles.wBtn} onClick={() => setShowSetup(true)} title="设置 / API Key">⚙</button>
           <button style={styles.wBtn} onClick={() => toggleMini(true)} title="迷你播放器（置顶小窗）">▭</button>
           <button style={styles.wBtn} onClick={() => window.electronAPI.minimize()}>—</button>
           <button style={styles.wBtn} onClick={() => window.electronAPI.maximize()}>□</button>
