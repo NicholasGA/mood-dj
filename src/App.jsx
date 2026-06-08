@@ -5,6 +5,7 @@ import NowPlaying from './components/NowPlaying'
 import Visualizer from './components/Visualizer'
 import DJAnnouncement from './components/DJAnnouncement'
 import MiniPlayer from './components/MiniPlayer'
+import LikesPanel from './components/LikesPanel'
 import Icon from './components/Icon'
 import { searchTracks, getSongUrl, getLyric, searchPlaylists, getPlaylistTracks, searchByArtist } from './services/qqMusicApi'
 import { analyzeMood, generateAnnouncement, curateTracks, interpretRequest, configureLLM, hasLLMKey } from './services/claudeDJ'
@@ -452,7 +453,11 @@ export default function App() {
     if (!cur) return
     const mem = memoryRef.current
     if (!mem.likedTracks.some(t => t.mid === cur.mid)) {
-      mem.likedTracks.push({ id: cur.id, mid: cur.mid, media_mid: cur.media_mid, name: cur.name, artists: cur.artists, album: cur.album })
+      const ctx = radioRef.current
+      mem.likedTracks.push({
+        id: cur.id, mid: cur.mid, media_mid: cur.media_mid, name: cur.name, artists: cur.artists, album: cur.album,
+        mood: moodConfigRef.current?.mood_name || '', energy: ctx?.energy ?? null, likedAt: Date.now(),  // 带心情记忆
+      })
       saveMemory()
       setLikedCount(mem.likedTracks.length)
     }
@@ -485,6 +490,38 @@ export default function App() {
     mem.likedTracks = mem.likedTracks.filter(t => t.mid !== mid)
     saveMemory()
     setLikedCount(mem.likedTracks.length)
+  }
+
+  // 喜欢电台（发现版）：爱的歌 × AI 发现的同好新歌，交错播放、无限续 —— QQ 收藏夹做不到
+  async function startLikesRadio() {
+    const likes = memoryRef.current.likedTracks
+    if (likes.length < 2) { showToast('先多 ❤️ 几首，喜欢电台才好玩'); return }
+    setShowLikes(false); setLoadingTrack(true)
+    try {
+      const arts = likedArtists()
+      const seen = new Set(likes.map(t => t.mid))
+      const disliked = new Set(memoryRef.current.dislikedArtists)
+      const discovered = []
+      const add = (arr) => { for (const t of arr || []) if (t?.mid && !seen.has(t.mid) && !(t.artists || []).some(a => disliked.has(a.name))) { seen.add(t.mid); discovered.push(t) } }
+      ;(await Promise.allSettled(arts.slice(0, 5).map(a => searchByArtist(qqCookiesRef.current, a, 20, 1 + Math.floor(Math.random() * 3))))).forEach(r => r.status === 'fulfilled' && add(r.value))
+      // 交错：你爱的(新→旧) 与 发现的(乱序)
+      const loved = likes.slice().reverse(), disc = discovered.sort(() => Math.random() - 0.5)
+      const ordered = []
+      for (let i = 0; i < Math.max(loved.length, disc.length); i++) { if (i < loved.length) ordered.push(loved[i]); if (i < disc.length) ordered.push(disc[i]) }
+      radioRef.current = { queries: arts.slice(0, 5), playlistIds: [], seen, energy: 0.5, valence: 0.6, disliked }
+      const cfg = { mood_name: '喜欢电台', search_queries: arts, color_primary: '#f472b6', color_secondary: '#a855f7', mood_emoji: '❤️', dj_intro: '专属你的喜欢电台，边听边挖新宝藏~', energy: 0.5 }
+      setMoodConfig(cfg); setAnnouncement(cfg.dj_intro); setShowAnnouncement(true); setTimeout(() => setShowAnnouncement(false), 6000)
+      queueRef.current = ordered; setQueue(ordered)
+      playNext()
+    } finally { setLoadingTrack(false) }
+  }
+
+  // 播放一个自动分组
+  function playGroup(tracks) {
+    if (!tracks?.length) return
+    queueRef.current = tracks.slice(); setQueue(tracks.slice())
+    setShowLikes(false)
+    playNext()
   }
 
   // 对话点歌：解析意图（歌手/关键词）→ 歌手按本人搜、关键词按曲风搜 → 新点的排队首，保留当前曲
@@ -631,31 +668,15 @@ export default function App() {
       <div style={{ ...styles.toast, opacity: toast ? 1 : 0, transform: toast ? 'translate(-50%,0)' : 'translate(-50%,8px)' }}>{toast}</div>
 
       {showLikes && (
-        <div style={styles.likesOverlay} onClick={() => setShowLikes(false)}>
-          <div style={styles.likesPanel} className="fade-up" onClick={e => e.stopPropagation()}>
-            <div style={styles.likesHead}>
-              <span style={styles.likesTitle}><Icon name="heart" size={16} color="#f472b6" filled /> 我喜欢的 · {likedCount} 首</span>
-              {likedCount > 0 && <button style={{ ...styles.likesPlayAll, background: accent }} onClick={() => playLiked(null)}><Icon name="play" size={12} color="#fff" /> 全部播放</button>}
-              <button style={styles.likesClose} onClick={() => setShowLikes(false)}>✕</button>
-            </div>
-            <div style={styles.likesList} className="lyrics-scroll">
-              {likedCount === 0
-                ? <div style={styles.likesEmpty}>还没有喜欢的歌～<br />播放时点 ❤️ 喜欢，就会加到这里随时重听</div>
-                : memoryRef.current.likedTracks.slice().reverse().map(t => (
-                  <div key={t.mid} style={styles.likeRow} className="like-row" onClick={() => playLiked(t)}>
-                    {t.album?.images?.[0]?.url
-                      ? <img src={t.album.images[0].url} alt="" style={styles.likeCover} />
-                      : <div style={{ ...styles.likeCover, ...styles.likeCoverPh }}>♪</div>}
-                    <div style={styles.likeMeta}>
-                      <div style={styles.likeName}>{t.name}</div>
-                      <div style={styles.likeArtist}>{t.artists?.map(a => a.name).join(', ')}</div>
-                    </div>
-                    <button style={styles.likeRemove} className="like-remove" title="取消喜欢" onClick={e => { e.stopPropagation(); removeLiked(t.mid) }}>✕</button>
-                  </div>
-                ))}
-            </div>
-          </div>
-        </div>
+        <LikesPanel
+          likedTracks={memoryRef.current.likedTracks}
+          accent={accent}
+          onClose={() => setShowLikes(false)}
+          onPlayTrack={playLiked}
+          onRemove={removeLiked}
+          onPlayRadio={startLikesRadio}
+          onPlayGroup={playGroup}
+        />
       )}
     </div>
   )
@@ -679,19 +700,4 @@ const styles = {
   updateBtn: { padding: '5px 12px', borderRadius: 8, border: 'none', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer' },
   noDragBtn: { WebkitAppRegion: 'no-drag' },
   likesBtn: { display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11, padding: '3px 11px', borderRadius: 20, fontWeight: 600, background: 'rgba(244,114,182,0.14)', color: '#f9a8d4', border: '1px solid rgba(244,114,182,0.3)', cursor: 'pointer' },
-  likesOverlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)', zIndex: 400, display: 'flex', alignItems: 'center', justifyContent: 'center' },
-  likesPanel: { width: 'min(480px, 92vw)', maxHeight: '78vh', display: 'flex', flexDirection: 'column', background: 'rgba(16,16,22,0.96)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 18, boxShadow: '0 30px 80px rgba(0,0,0,0.6)', overflow: 'hidden' },
-  likesHead: { display: 'flex', alignItems: 'center', gap: 10, padding: '16px 18px', borderBottom: '1px solid rgba(255,255,255,0.07)' },
-  likesTitle: { display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 15, fontWeight: 700, color: '#f9fafb' },
-  likesPlayAll: { marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 5, padding: '6px 12px', borderRadius: 18, border: 'none', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer' },
-  likesClose: { width: 26, height: 26, borderRadius: 8, background: 'rgba(255,255,255,0.08)', border: 'none', color: '#cbd5e1', fontSize: 13, cursor: 'pointer' },
-  likesList: { overflowY: 'auto', padding: 8 },
-  likesEmpty: { padding: '48px 24px', textAlign: 'center', color: '#9ca3af', fontSize: 13, lineHeight: 1.8 },
-  likeRow: { display: 'flex', alignItems: 'center', gap: 12, padding: 8, borderRadius: 12, cursor: 'pointer', transition: 'background .15s' },
-  likeCover: { width: 46, height: 46, borderRadius: 8, objectFit: 'cover', flexShrink: 0 },
-  likeCoverPh: { display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(255,255,255,0.06)', fontSize: 20 },
-  likeMeta: { flex: 1, minWidth: 0 },
-  likeName: { fontSize: 14, fontWeight: 600, color: '#f3f4f6', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
-  likeArtist: { fontSize: 12, color: '#9ca3af', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', marginTop: 2 },
-  likeRemove: { width: 26, height: 26, borderRadius: '50%', background: 'transparent', border: 'none', color: '#6b7280', fontSize: 12, cursor: 'pointer', flexShrink: 0 },
 }

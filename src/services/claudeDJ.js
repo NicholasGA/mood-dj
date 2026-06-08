@@ -189,6 +189,49 @@ ${numbered}
   return [...picked, ...rest]
 }
 
+// AI 音乐画像：读用户喜欢的歌 → 曲风/情绪/人格/探索方向
+export async function analyzeTaste(tracks) {
+  const list = (tracks || []).slice(-60).map(t => `${t.name} - ${t.artists?.map(a => a.name).join('/') || ''}`).join('\n')
+  const system = `你是懂行、有洞察又温柔的乐评人。只输出JSON，不要解释。`
+  const raw = await gemini(system, `
+用户喜欢的歌：
+${list}
+
+分析他的音乐口味，返回JSON：
+{
+  "personality": "一句话音乐人格(≤28字，有洞察、有温度，像懂他的朋友)",
+  "genres": ["主要曲风2-4个"],
+  "moods": ["偏爱的情绪或场景2-4个"],
+  "artists": ["最常出现的歌手2-4个"],
+  "explore": "一句话建议接下来可以挖什么(≤24字)"
+}`, { maxTokens: 500, temperature: 0.85 })
+  const m = raw.match(/\{[\s\S]*\}/)
+  if (!m) throw new Error('taste failed')
+  const j = JSON.parse(m[0])
+  return { personality: j.personality || '', genres: j.genres || [], moods: j.moods || [], artists: j.artists || [], explore: j.explore || '' }
+}
+
+// 自动 vibe 分组：把喜欢的歌按氛围聚成几组
+export async function clusterLikes(tracks) {
+  const pool = (tracks || []).slice(-50)
+  if (pool.length < 4) return []
+  const numbered = pool.map((t, i) => `${i + 1}. ${t.name} - ${t.artists?.map(a => a.name).join('/') || ''}`).join('\n')
+  const system = `你是歌单编辑，擅长按氛围/场景把歌分组。只输出JSON，不要解释。`
+  const raw = await gemini(system, `
+歌曲：
+${numbered}
+
+按氛围/场景分成 3-5 组（如 深夜/通勤燃/治愈/派对/专注…），每组给名字、一个emoji、该组的编号。每首尽量只进最合适的一组。
+返回JSON：{"groups":[{"name":"组名2-5字","emoji":"单emoji","idx":[编号,...]}]}`, { retries: 1, maxTokens: 800, temperature: 0.6 })
+  const m = raw.match(/\{[\s\S]*\}/)
+  if (!m) throw new Error('cluster failed')
+  const j = JSON.parse(m[0])
+  return (j.groups || []).map(g => ({
+    name: g.name, emoji: g.emoji || '🎵',
+    tracks: (g.idx || []).map(n => pool[n - 1]).filter(Boolean),
+  })).filter(g => g.tracks.length)
+}
+
 export async function generateAnnouncement(prevTrack, nextTrack, moodName) {
   const now = Date.now()
   if (now - _lastCallTime < ANNOUNCE_COOLDOWN) return ''
