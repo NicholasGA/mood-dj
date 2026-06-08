@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { splitKeys, localInterpret, configureLLM, hasLLMKey } from '../src/services/claudeDJ'
+import { splitKeys, localInterpret, configureLLM, hasLLMKey, evalBudget } from '../src/services/claudeDJ'
 
 describe('splitKeys', () => {
   it('逗号分隔、去空白、丢空项', () => {
@@ -47,5 +47,34 @@ describe('configureLLM / hasLLMKey', () => {
     expect(hasLLMKey()).toBe(true)
     configureLLM({ geminiKey: '', openrouterKey: '' })
     expect(hasLLMKey()).toBe(false)
+  })
+})
+
+describe('evalBudget（每日 LLM 预算：让免费额度撑一天）', () => {
+  const today = evalBudget(null).date
+
+  it('无记录 → 计数 0、核心与故事都放行', () => {
+    const b = evalBudget(null, Date.now(), 200)
+    expect(b.count).toBe(0)
+    expect(b.blockCore).toBe(false)
+    expect(b.blockStory).toBe(false)
+  })
+
+  it('用到 65%（130/200）→ 先拦故事，核心仍放行', () => {
+    const b = evalBudget({ date: today, count: 130 }, Date.now(), 200)
+    expect(b.blockStory).toBe(true)
+    expect(b.blockCore).toBe(false)
+  })
+
+  it('用满上限 → 核心也拦', () => {
+    const b = evalBudget({ date: today, count: 200 }, Date.now(), 200)
+    expect(b.blockCore).toBe(true)
+    expect(b.blockStory).toBe(true)
+  })
+
+  it('跨天 → 计数清零、恢复放行', () => {
+    const b = evalBudget({ date: '1999-01-01', count: 999 }, Date.now(), 200)
+    expect(b.count).toBe(0)
+    expect(b.blockCore).toBe(false)
   })
 })

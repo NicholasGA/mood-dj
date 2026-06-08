@@ -11,8 +11,37 @@ export function configureLLM(cfg = {}) {
   if (cfg.geminiModel) MODEL = cfg.geminiModel
   if (cfg.openrouterKey != null) OPENROUTER_KEY = cfg.openrouterKey.trim()
   if (cfg.openrouterModel) OPENROUTER_MODEL = cfg.openrouterModel
+  if (cfg.dailyLimit) DAILY_LIMIT = Number(cfg.dailyLimit) || DAILY_LIMIT
 }
 export function hasLLMKey() { return GEMINI_KEYS.length > 0 || !!OPENROUTER_KEY }
+
+// ── 每日 LLM 调用预算（省配额：让免费额度撑一天）────────────────────────────
+// 客户端按本地日期计数，超额就让调用方走本地兜底（而不是把真实配额耗尽/到处报错）。
+// 故事类调用占量最大，预留最后 35% 给核心调用（心情分析/选歌），故事先让路。
+const DAILY_LIMIT_DEFAULT = 200
+let DAILY_LIMIT = DAILY_LIMIT_DEFAULT
+const BUDGET_KEY = 'mooddj-llm-budget'
+
+function ymd(now) {
+  const d = new Date(now)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+// 纯函数（可单测）：据已存计数 + 当前时间，算出今日计数与是否该拦核心/故事
+export function evalBudget(stored, now = Date.now(), dailyLimit = DAILY_LIMIT) {
+  const date = ymd(now)
+  const count = (stored && stored.date === date) ? (stored.count || 0) : 0
+  const storyCutoff = Math.max(1, Math.floor(dailyLimit * 0.65))
+  return { date, count, dailyLimit, blockCore: count >= dailyLimit, blockStory: count >= storyCutoff }
+}
+function loadBudget() { try { return JSON.parse(localStorage.getItem(BUDGET_KEY) || 'null') } catch { return null } }
+function bumpBudget(date) {
+  try {
+    const raw = loadBudget()
+    const count = (raw && raw.date === date) ? (raw.count || 0) : 0
+    localStorage.setItem(BUDGET_KEY, JSON.stringify({ date, count: count + 1 }))
+  } catch { /* 无 localStorage（如测试环境）→ 不计数 */ }
+}
+export function llmBudget() { return evalBudget(loadBudget()) }   // 供 UI 显示今日用量
 
 const KEY_COOLDOWN_MS = 90 * 1000   // 某 key 限流后冷却 90 秒再试（RPM 限流约 60s 恢复，别一次限流就半小时不可用）
 const keyCooldown = new Map()            // key -> 冷却截止时间戳
@@ -50,14 +79,21 @@ async function callOpenRouter(system, userMsg, maxTokens, temperature) {
   return (data.choices?.[0]?.message?.content || '').trim()
 }
 
-// 统一 LLM 入口：依次试每个未冷却的 Gemini key，限流则冷却该 key 换下一个；全挂则用 OpenRouter
-async function gemini(system, userMsg, { maxTokens = 600, temperature = 0.9 } = {}) {
+// 统一 LLM 入口：先看每日预算（超额→抛 budget 让调用方走本地兜底），
+// 再依次试每个未冷却的 Gemini key，限流则冷却换下一个；全挂则用 OpenRouter。
+async function gemini(system, userMsg, { maxTokens = 600, temperature = 0.9, kind = 'core' } = {}) {
   const now = Date.now()
+  const budget = evalBudget(loadBudget(), now)
+  if (budget.blockCore || (kind === 'story' && budget.blockStory)) {
+    const e = new Error('budget'); e.budgetExhausted = true; throw e
+  }
   let sawRateLimit = false
   for (const key of GEMINI_KEYS) {
     if ((keyCooldown.get(key) || 0) > now) { sawRateLimit = true; continue }
     try {
-      return await callGemini(key, system, userMsg, maxTokens, temperature)
+      const out = await callGemini(key, system, userMsg, maxTokens, temperature)
+      bumpBudget(budget.date)   // 仅在 Gemini 真正成功时计数（OpenRouter 不占 Gemini 额度）
+      return out
     } catch (e) {
       if (e.rateLimited) { keyCooldown.set(key, Date.now() + KEY_COOLDOWN_MS); sawRateLimit = true }
       // 其它错误（网络/超时）：继续试下一个 key
@@ -239,7 +275,7 @@ export async function generateStory(track, lyricSnippet = '', taste = {}) {
   const text = await gemini(system, `
 歌曲：${track?.name} - ${artist}${tasteHint}${lyricBlock}
 
-用一句话(≤30字)介绍这首歌：优先结合上面的歌词点出它的情绪/故事/主题；若你确知真实创作背景可讲；不确定就讲风格，别编造具体事实(假获奖/假年份)。口语、有DJ腔。`, { maxTokens: 200, temperature: 0.85 })
+用一句话(≤30字)介绍这首歌：优先结合上面的歌词点出它的情绪/故事/主题；若你确知真实创作背景可讲；不确定就讲风格，别编造具体事实(假获奖/假年份)。口语、有DJ腔。`, { maxTokens: 200, temperature: 0.85, kind: 'story' })
   const one = (text || '').split(/[\n。！!?？]/)[0].trim().replace(/^["“「]|["”」]$/g, '')
   return one.slice(0, 40)
 }
