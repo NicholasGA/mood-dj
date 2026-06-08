@@ -55,7 +55,7 @@ export default function MoodInput({ onStart, isLoading, isActive, moodConfig }) 
   const accent = moodConfig?.color_primary || '#7c3aed'
 
   return (
-    <div style={styles.panel}>
+    <div style={styles.panel} className="fade-up">
       <h2 style={styles.heading}>今日心情</h2>
 
       <div style={{ ...styles.suggest, borderColor: `${accent}55`, background: `linear-gradient(120deg, ${accent}22, rgba(255,255,255,0.03))` }}>

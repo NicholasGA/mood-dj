@@ -47,7 +47,7 @@ export default function Onboarding({ qqCookies, onQQAuth, onReady, onClose, canC
 
   return (
     <div style={s.wrap}>
-      <div style={s.card}>
+      <div style={s.card} className="fade-up">
         {canClose && <button style={s.x} onClick={onClose} title="关闭">✕</button>}
         <div style={{ fontSize: 44, textAlign: 'center' }}>🎧</div>
         <h1 style={s.title}>Mood DJ</h1>

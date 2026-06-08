@@ -74,13 +74,13 @@ export default function NowPlaying({ track, isPlaying, loadingTrack, audioRef, o
   const artist = track?.artists?.map(a => a.name).join(', ') || (loadingTrack ? '正在为你挑选可播放的歌曲' : '等待播放中')
 
   return (
-    <div style={s.card}>
+    <div style={s.card} className="fade-up">
       <div style={s.albumWrap}>
         {art
-          ? <img src={art} alt={title} style={{ ...s.album, boxShadow: isPlaying ? '0 0 50px rgba(49,194,124,0.5)' : 'none' }} />
+          ? <img src={art} alt={title} style={{ ...s.album, boxShadow: isPlaying ? `0 0 50px ${accent}88` : '0 6px 24px rgba(0,0,0,0.45)' }} />
           : <div style={{ ...s.album, ...s.ph }}>🎵</div>
         }
-        {isPlaying && <div style={s.ring} />}
+        {isPlaying && <div style={{ ...s.ring, borderColor: `${accent}66` }} />}
       </div>
 
       <div style={s.info}>
@@ -114,11 +114,12 @@ export default function NowPlaying({ track, isPlaying, loadingTrack, audioRef, o
 
       {track && onVibe && (
         <div style={s.vibeRow}>
-          <button style={{ ...s.vibeBtn, borderColor: '#f472b633', color: '#f9a8d4' }} onClick={onLike} title="喜欢，收藏到 QQ我喜欢">❤️ 喜欢</button>
+          <button style={{ ...s.vibeBtn, borderColor: '#f472b640', color: '#f9a8d4', background: 'rgba(244,114,182,0.08)' }} onClick={onLike} title="喜欢，收藏到 QQ我喜欢">❤️ 喜欢</button>
+          <button style={s.vibeBtn} onClick={onDislike} title="不喜欢这首，少推这类">👎 不喜欢</button>
+          <span style={s.vibeDiv} />
           <button style={s.vibeBtn} onClick={() => onVibe('up')} title="再嗨一点">🔥 再嗨点</button>
           <button style={s.vibeBtn} onClick={() => onVibe('down')} title="冷静一些">🌙 冷静些</button>
           <button style={s.vibeBtn} onClick={() => onVibe('flavor')} title="换个味道">🔀 换味道</button>
-          <button style={s.vibeBtn} onClick={onDislike} title="不喜欢这首，少推这类">👎 不喜欢</button>
         </div>
       )}
 
@@ -171,8 +172,9 @@ const s = {
   btn: { width: 48, height: 48, borderRadius: '50%', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.15)', color: '#fff', fontSize: 20, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' },
   badge: { fontSize: 12, color: '#6b7280', background: 'rgba(255,255,255,0.06)', padding: '4px 10px', borderRadius: 20 },
   volRow: { display: 'flex', alignItems: 'center', gap: 8, width: '100%' },
-  vibeRow: { display: 'flex', gap: 6, width: '100%', justifyContent: 'center', flexWrap: 'wrap' },
-  vibeBtn: { padding: '6px 10px', borderRadius: 16, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', color: '#e5e7eb', fontSize: 12, cursor: 'pointer', whiteSpace: 'nowrap' },
+  vibeRow: { display: 'flex', gap: 6, width: '100%', justifyContent: 'center', alignItems: 'center', flexWrap: 'wrap' },
+  vibeBtn: { padding: '6px 11px', borderRadius: 16, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', color: '#e5e7eb', fontSize: 12, cursor: 'pointer', whiteSpace: 'nowrap' },
+  vibeDiv: { width: 1, height: 18, background: 'rgba(255,255,255,0.12)', margin: '0 2px' },
   steerRow: { display: 'flex', gap: 6, width: '100%' },
   steerInput: { flex: 1, minWidth: 0, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, padding: '8px 12px', color: '#f9fafb', fontSize: 13, outline: 'none' },
   steerBtn: { flexShrink: 0, padding: '0 14px', borderRadius: 10, border: 'none', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer' },

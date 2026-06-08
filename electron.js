@@ -3,11 +3,13 @@ const path = require('path')
 const fs = require('fs')
 
 // 主进程日志落盘，方便排查（dev 下 concurrently 会吞掉 stdout）
-const DEBUG_LOG = path.join(__dirname, 'debug.log')
 const dlog = (...args) => {
   const line = `[${new Date().toISOString().slice(11, 19)}] ${args.join(' ')}`
   console.log(line)
-  try { fs.appendFileSync(DEBUG_LOG, line + '\n') } catch {}
+  try {
+    const dir = app.isReady() ? app.getPath('userData') : __dirname   // 打包后 __dirname 在只读 asar 里
+    fs.appendFileSync(path.join(dir, 'debug.log'), line + '\n')
+  } catch {}
 }
 
 // 解析真实 uin：QQ 登录在 `uin`(形如 o0xxxx)，微信登录在 `wxuin`
@@ -19,8 +21,12 @@ function resolveUin(cookies) {
 
 // Must register before app.whenReady()
 protocol.registerSchemesAsPrivileged([
-  { scheme: 'qq-audio', privileges: { supportFetchAPI: true, stream: true, bypassCSP: true, corsEnabled: true } }
+  { scheme: 'qq-audio', privileges: { supportFetchAPI: true, stream: true, bypassCSP: true, corsEnabled: true } },
+  // 打包后用 app:// 加载页面，避免 file:// 下 ES module 加载失败导致黑屏
+  { scheme: 'app', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true } },
 ])
+
+const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.woff2': 'font/woff2', '.woff': 'font/woff', '.ttf': 'font/ttf', '.ico': 'image/x-icon' }
 
 const isDev = process.env.ELECTRON_DEV === 'true'
 let mainWindow
@@ -39,12 +45,29 @@ function createWindow() {
     mainWindow.loadURL('http://localhost:5173')
     mainWindow.webContents.openDevTools({ mode: 'detach' })
   } else {
-    mainWindow.loadFile(path.join(__dirname, 'dist', 'index.html'))
+    mainWindow.loadURL('app://bundle/index.html')
   }
+  // 加载失败诊断（仅错误时记录）
+  mainWindow.webContents.on('did-fail-load', (_e, code, desc, url) => dlog('[did-fail-load]', code, desc, url))
+  mainWindow.webContents.on('render-process-gone', (_e, d) => dlog('[render-gone]', JSON.stringify(d)))
 }
 
 // ── qq-audio:// protocol — proxies CDN requests with session cookies ─
 app.whenReady().then(() => {
+  // app:// — 打包后从 dist 提供前端文件（绕开 file:// 的模块加载限制）
+  protocol.handle('app', async (request) => {
+    try {
+      let rel = decodeURIComponent(new URL(request.url).pathname)
+      if (!rel || rel === '/') rel = '/index.html'
+      const filePath = path.join(__dirname, 'dist', path.normalize(rel))
+      const data = await fs.promises.readFile(filePath)
+      return new Response(data, { headers: { 'Content-Type': MIME[path.extname(filePath).toLowerCase()] || 'application/octet-stream' } })
+    } catch (e) {
+      dlog('[app protocol]', e.message)
+      return new Response('Not Found', { status: 404 })
+    }
+  })
+
   protocol.handle('qq-audio', async (request) => {
     try {
       const cdnUrl = new URL(request.url).searchParams.get('u') || ''
