@@ -17,6 +17,7 @@
     "directories": { "output": "release" },
     "files": ["electron.js", "preload.js", "dist/**/*"],
     "win": {
+      "icon": "build/icon.png",
       "target": [
         { "target": "nsis", "arch": ["x64"] },
         { "target": "portable", "arch": ["x64"] }
