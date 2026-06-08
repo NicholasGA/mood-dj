@@ -9,6 +9,7 @@ import LikesPanel from './components/LikesPanel'
 import Icon from './components/Icon'
 import { searchTracks, getSongUrl, getLyric, searchPlaylists, getPlaylistTracks, searchByArtist } from './services/qqMusicApi'
 import { analyzeMood, generateStory, curateTracks, interpretRequest, configureLLM, hasLLMKey, analyzeTaste, clusterLikes } from './services/claudeDJ'
+import { localStory, localMoodConfig } from './services/djText'
 import { extractAlbumColors } from './services/albumColor'
 
 export default function App() {
@@ -166,19 +167,6 @@ export default function App() {
       audio.removeEventListener('error', onError)
     }
   }, [])
-
-  // 本地兜底简介（零 API）：AI 没好/配额用尽时也保证每首都有一句，按 mid 选句保持稳定
-  const localStory = (t) => {
-    const name = t?.name || '这首'
-    const artist = t?.artists?.map(a => a.name).join('、') || ''
-    const tmpl = artist
-      ? [`${artist} 的「${name}」，跟着走就对了`, `接下来「${name}」— ${artist}，听听这个味道`,
-         `${artist} 带来「${name}」，让它陪你这一刻`, `「${name}」，${artist}，闭眼感受一下`]
-      : [`「${name}」，让它陪你这一刻`, `接下来「${name}」，跟着感觉走`]
-    let h = 0; const s = t?.mid || name
-    for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0
-    return tmpl[h % tmpl.length]
-  }
 
   const showDJ = useCallback((next) => {
     // 立刻显示：有缓存的歌词故事就用，否则本地兜底——保证每首都有一句（AI 故事由下面副作用异步补上）
@@ -364,12 +352,7 @@ export default function App() {
       try {
         config = await analyzeMood(moodText, energy, valence, 'qq')
       } catch {
-        config = {
-          mood_name: moodText.slice(0, 6) || '随心',
-          search_queries: ['流行音乐', '好听的歌 轻快', '华语流行'],
-          color_primary: '#31c27c', color_secondary: '#1db954',
-          mood_emoji: '🎵', dj_intro: '音乐开始，感受当下~',
-        }
+        config = localMoodConfig(moodText)   // AI 不可用：按关键词本地兜底，比通用歌单更贴心情
       }
       config.energy = energy  // 供 Visualizer 用（analyzeMood 不回传 energy）
       setMoodConfig(config)
