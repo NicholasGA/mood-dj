@@ -5,8 +5,8 @@ import NowPlaying from './components/NowPlaying'
 import Visualizer from './components/Visualizer'
 import DJAnnouncement from './components/DJAnnouncement'
 import MiniPlayer from './components/MiniPlayer'
-import { searchTracks, getSongUrl, getLyric, searchPlaylists, getPlaylistTracks } from './services/qqMusicApi'
-import { analyzeMood, generateAnnouncement, curateTracks } from './services/claudeDJ'
+import { searchTracks, getSongUrl, getLyric, searchPlaylists, getPlaylistTracks, searchByArtist } from './services/qqMusicApi'
+import { analyzeMood, generateAnnouncement, curateTracks, interpretRequest } from './services/claudeDJ'
 import { extractAlbumColors } from './services/albumColor'
 
 export default function App() {
@@ -410,6 +410,54 @@ export default function App() {
     playNext()
   }
 
+  // 对话点歌：解析意图（歌手/关键词）→ 歌手按本人搜、关键词按曲风搜 → 新点的排队首，保留当前曲
+  async function steerRadio(text) {
+    const t = (text || '').trim()
+    if (!t || !radioRef.current) return
+    const ctx = radioRef.current
+    const E = ctx.energy ?? 0.5, V = ctx.valence ?? 0.5
+    setLoadingTrack(true)
+    showToast('🎙️ 在帮你换…')
+    try {
+      let intent
+      try { intent = await interpretRequest(t) }
+      catch { intent = { artists: [], keywords: [t], mood_name: t.slice(0, 6) || '点歌', dj_intro: '好嘞，换个味道~' } }
+      // 只改名字/回应，配色保留（不突兀）
+      setMoodConfig(m => ({ ...(m || {}), mood_name: intent.mood_name, mood_emoji: m?.mood_emoji || '🎙️', dj_intro: intent.dj_intro, energy: E }))
+      setAnnouncement(intent.dj_intro); setShowAnnouncement(true); setTimeout(() => setShowAnnouncement(false), 6000)
+
+      const pool = []
+      const disliked = (x) => ctx.disliked && (x.artists || []).some(a => ctx.disliked.has(a.name))
+      const add = (arr) => { for (const x of arr || []) if (x?.mid && !ctx.seen.has(x.mid) && !disliked(x)) { ctx.seen.add(x.mid); pool.push(x) } }
+
+      // 点名歌手 → 搜本人（singer 过滤），翻两页
+      for (const ar of intent.artists.slice(0, 3)) {
+        ;(await Promise.allSettled([1, 2].map(p => searchByArtist(qqCookiesRef.current, ar, 20, p)))).forEach(r => r.status === 'fulfilled' && add(r.value))
+      }
+      // 关键词 → 曲风/心情搜索
+      ;(await Promise.allSettled((intent.keywords || []).map(q => searchTracks(qqCookiesRef.current, q, 15, 1 + Math.floor(Math.random() * 3))))).forEach(r => r.status === 'fulfilled' && add(r.value))
+      // 没点歌手时，搜歌单补充变化
+      if (!intent.artists.length) {
+        try {
+          const pls = await searchPlaylists(qqCookiesRef.current, intent.keywords?.[0] || t, 6)
+          const ids = pls.slice(0, 2).map(p => p.id)
+          ctx.playlistIds.push(...ids.filter(id => !ctx.playlistIds.includes(id)))
+          ;(await Promise.allSettled(ids.map(id => getPlaylistTracks(qqCookiesRef.current, id, 50)))).forEach(r => r.status === 'fulfilled' && add(r.value))
+        } catch {}
+      }
+
+      if (!pool.length) { showToast('没找到合适的，换个说法试试'); return }
+      const cfg = { mood_name: intent.mood_name, search_queries: intent.keywords, energy: E }
+      let ordered
+      try { ordered = await curateTracks(pool, cfg, E, V, [...(favRef.current?.topArtists || []), ...intent.artists]) }
+      catch { ordered = pool.sort(() => Math.random() - 0.5) }
+      const merged = [...ordered, ...queueRef.current]   // 新点的排队首，下一首即生效
+      queueRef.current = merged; setQueue(merged)
+      ctx.queries = [...(intent.keywords || []), ...intent.artists]   // 后续补歌也带上
+      showToast(intent.artists.length ? `🎙️ 来点${intent.artists[0]}` : '🎙️ 换好了，下一首给你')
+    } finally { setLoadingTrack(false) }
+  }
+
   function logout() {
     audioRef.current.pause()
     audioRef.current.src = ''
@@ -475,6 +523,7 @@ export default function App() {
           accent={accent}
           onVibe={adjustVibe}
           onDislike={dislikeCurrent}
+          onSteer={steerRadio}
         />
       </div>
 

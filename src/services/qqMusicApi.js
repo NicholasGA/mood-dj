@@ -55,6 +55,14 @@ export async function searchTracks(cookies, query, limit = 20, page = 1) {
   return (data?.body?.song?.list || []).map(mapSong).filter(Boolean)
 }
 
+// ── 按歌手搜：搜歌手名后用 singer 字段过滤，剔除"标题里含该词"的杂歌 ──
+export async function searchByArtist(cookies, artist, limit = 20, page = 1) {
+  const tracks = await searchTracks(cookies, artist, limit, page)
+  const norm = (s) => (s || '').toLowerCase().replace(/\s/g, '')
+  const a = norm(artist)
+  return tracks.filter(t => (t.artists || []).some(x => { const n = norm(x.name); return n && (n.includes(a) || a.includes(n)) }))
+}
+
 // ── Search 歌单（参考别人的歌单）──────────────────────────────────
 export async function searchPlaylists(cookies, query, limit = 8) {
   const data = await musicu(cookies, {

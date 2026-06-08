@@ -1,45 +1,67 @@
-const API_KEY = import.meta.env.VITE_GEMINI_API_KEY
-// gemini-2.5-flash 免费层仅 20 次/天，根本不够用；2.5-flash-lite 免费日配额高得多且足够胜任
+// 多 key 轮换：VITE_GEMINI_API_KEY 支持逗号分隔多个 key（各自独立配额）
+const GEMINI_KEYS = (import.meta.env.VITE_GEMINI_API_KEY || '').split(',').map(s => s.trim()).filter(Boolean)
+// gemini-2.5-flash 免费层仅 20 次/天；2.5-flash-lite 免费日配额高得多且够用
 const MODEL = import.meta.env.VITE_GEMINI_MODEL || 'gemini-2.5-flash-lite'
+// 可选备用 Provider：OpenRouter（OpenAI 兼容，有免费模型）。所有 Gemini key 都限流后兜底
+const OPENROUTER_KEY = import.meta.env.VITE_OPENROUTER_API_KEY
+const OPENROUTER_MODEL = import.meta.env.VITE_OPENROUTER_MODEL || 'meta-llama/llama-3.3-70b-instruct:free'
+
+const KEY_COOLDOWN_MS = 30 * 60 * 1000   // 某 key 限流后冷却 30 分钟再试
+const keyCooldown = new Map()            // key -> 冷却截止时间戳
+
 let _lastCallTime = 0
 const ANNOUNCE_COOLDOWN = 25000 // ms between announcement calls
 
-const sleep = (ms) => new Promise(r => setTimeout(r, ms))
+async function fetchJSON(url, opts, ms = 12000) {
+  const ctrl = new AbortController()
+  const timer = setTimeout(() => ctrl.abort(), ms)
+  try { return await fetch(url, { ...opts, signal: ctrl.signal }) }
+  finally { clearTimeout(timer) }
+}
 
-async function gemini(system, userMsg, { retries = 2, maxTokens = 600, temperature = 0.9 } = {}) {
-  for (let attempt = 0; ; attempt++) {
-    const ctrl = new AbortController()
-    const timer = setTimeout(() => ctrl.abort(), 12000)  // 防止网络卡住时无限挂起
-    let res
+async function callGemini(key, system, userMsg, maxTokens, temperature) {
+  const res = await fetchJSON(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${key}`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      system_instruction: { parts: [{ text: system }] },
+      contents: [{ role: 'user', parts: [{ text: userMsg }] }],
+      generationConfig: { maxOutputTokens: maxTokens, temperature, thinkingConfig: { thinkingBudget: 0 } },
+    }),
+  })
+  if (res.status === 429) { const e = new Error('429'); e.rateLimited = true; throw e }
+  if (!res.ok) throw new Error(`gemini ${res.status}`)
+  const data = await res.json()
+  return (data.candidates?.[0]?.content?.parts ?? []).filter(p => !p.thought).map(p => p.text).join('').trim()
+}
+
+async function callOpenRouter(system, userMsg, maxTokens, temperature) {
+  const res = await fetchJSON('https://openrouter.ai/api/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${OPENROUTER_KEY}` },
+    body: JSON.stringify({ model: OPENROUTER_MODEL, max_tokens: maxTokens, temperature, messages: [{ role: 'system', content: system }, { role: 'user', content: userMsg }] }),
+  })
+  if (!res.ok) throw new Error(`openrouter ${res.status}`)
+  const data = await res.json()
+  return (data.choices?.[0]?.message?.content || '').trim()
+}
+
+// 统一 LLM 入口：依次试每个未冷却的 Gemini key，限流则冷却该 key 换下一个；全挂则用 OpenRouter
+async function gemini(system, userMsg, { maxTokens = 600, temperature = 0.9 } = {}) {
+  const now = Date.now()
+  let sawRateLimit = false
+  for (const key of GEMINI_KEYS) {
+    if ((keyCooldown.get(key) || 0) > now) { sawRateLimit = true; continue }
     try {
-      res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${API_KEY}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          signal: ctrl.signal,
-          body: JSON.stringify({
-            system_instruction: { parts: [{ text: system }] },
-            contents: [{ role: 'user', parts: [{ text: userMsg }] }],
-            generationConfig: { maxOutputTokens: maxTokens, temperature, thinkingConfig: { thinkingBudget: 0 } },
-          }),
-        }
-      )
-    } finally {
-      clearTimeout(timer)
+      return await callGemini(key, system, userMsg, maxTokens, temperature)
+    } catch (e) {
+      if (e.rateLimited) { keyCooldown.set(key, Date.now() + KEY_COOLDOWN_MS); sawRateLimit = true }
+      // 其它错误（网络/超时）：继续试下一个 key
     }
-    if (res.ok) {
-      const data = await res.json()
-      const parts = data.candidates?.[0]?.content?.parts ?? []
-      return parts.filter(p => !p.thought).map(p => p.text).join('').trim()
-    }
-    // 429 限流：指数退避后重试，仍失败才抛错（调用方有降级处理）
-    if (res.status === 429 && attempt < retries) {
-      await sleep(1000 * 2 ** attempt)
-      continue
-    }
-    throw new Error(`${res.status}`)
   }
+  if (OPENROUTER_KEY) {
+    try { return await callOpenRouter(system, userMsg, maxTokens, temperature) } catch {}
+  }
+  throw new Error(sawRateLimit ? 'all keys rate-limited' : 'llm failed')
 }
 
 export async function analyzeMood(text, energy, valence, platform = 'qq') {
@@ -76,6 +98,50 @@ export async function analyzeMood(text, energy, valence, platform = 'qq') {
     cfg.dj_intro = cfg.dj_intro.split(/[。！!?？\n]/)[0].slice(0, 30)
   }
   return cfg
+}
+
+// 本地意图解析（不依赖 AI，Gemini 挂了/限流也能用）：剥掉指令词，拆出歌手与心情
+function localInterpret(text) {
+  let s = (text || '').trim()
+  s = s.replace(/^(请|帮我|给我|我想听|我要听|我想|我要|想听|来听|放点|来点|听点|放首|来首|来个|换成|换点|整点|放|听|想|要)+/g, '')
+  s = s.replace(/(的歌曲?|的音乐|的曲子?|的|吧|嘛|啊|呗|哦|喔|呀)+$/g, '').trim()
+  // 拆 "歌手 + 但/还要/要 + 心情"
+  let artist = s, mood = ''
+  const conj = s.match(/^(.+?)(但是?|不过|还要|要|换成)\s*(.+)$/)
+  if (conj) { artist = conj[1].trim(); mood = conj[3] }
+  artist = artist.replace(/(的|点)+$/g, '').trim()
+  mood = (mood || '').replace(/(的|点)+$/g, '').trim()
+  const artists = (artist && artist.length <= 10 && !/[，,\s]/.test(artist)) ? [artist] : []
+  const keywords = (mood ? [mood] : (artist ? [artist] : [text])).filter(Boolean)
+  return { artists, keywords, mood_name: (artist || text).slice(0, 6), dj_intro: '好嘞，换个味道~' }
+}
+
+// 解析对话点歌请求 → 歌手 / 关键词 / 心情（AI 优先，失败回退本地解析）
+export async function interpretRequest(text) {
+  try {
+    const system = `你解析用户的点歌/换歌请求，只输出JSON，不要解释。`
+    const raw = await gemini(system, `
+用户说："${text}"
+解析其意图，返回JSON：
+{
+  "artists": ["用户点名的歌手原名(没有就空数组)"],
+  "keywords": ["描述曲风/心情/语种/场景的中文搜索词，2-4个，始终给(贴合请求)"],
+  "mood_name": "4-6字概括",
+  "dj_intro": "≤25字DJ口吻回应，呼应这句话"
+}`, { maxTokens: 400, temperature: 0.6 })
+    const m = raw.match(/\{[\s\S]*\}/)
+    if (!m) throw new Error('no json')
+    const j = JSON.parse(m[0])
+    const local = localInterpret(text)
+    return {
+      artists: Array.isArray(j.artists) && j.artists.length ? j.artists.filter(Boolean) : local.artists,
+      keywords: Array.isArray(j.keywords) && j.keywords.length ? j.keywords.filter(Boolean) : local.keywords,
+      mood_name: j.mood_name || local.mood_name,
+      dj_intro: j.dj_intro || local.dj_intro,
+    }
+  } catch {
+    return localInterpret(text)   // 限流/失败 → 本地解析，照样能识别歌手
+  }
 }
 
 // AI 精排：从候选池里按心情/能量/情绪挑选并排序，剔除不搭的歌；favArtists 偏向用户口味

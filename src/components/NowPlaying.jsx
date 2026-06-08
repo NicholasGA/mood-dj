@@ -1,10 +1,11 @@
 import { useState, useEffect, useRef } from 'react'
 import Lyrics from './Lyrics'
 
-export default function NowPlaying({ track, isPlaying, loadingTrack, audioRef, onNext, queueCount, onTogglePlay, lyric, accent = '#31c27c', onVibe, onDislike }) {
+export default function NowPlaying({ track, isPlaying, loadingTrack, audioRef, onNext, queueCount, onTogglePlay, lyric, accent = '#31c27c', onVibe, onDislike, onSteer }) {
   const [progress, setProgress] = useState(0)
   const [dur, setDur] = useState(0)
   const [vol, setVol] = useState(80)
+  const [steerText, setSteerText] = useState('')
   const barRef = useRef(null)
   const draggingRef = useRef(false)
 
@@ -120,6 +121,23 @@ export default function NowPlaying({ track, isPlaying, loadingTrack, audioRef, o
         </div>
       )}
 
+      {track && onSteer && (
+        <div style={s.steerRow}>
+          <input
+            style={s.steerInput}
+            placeholder="🎙️ 跟 DJ 说…「放点周杰伦但安静的」"
+            value={steerText}
+            onChange={e => setSteerText(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter' && steerText.trim()) { onSteer(steerText.trim()); setSteerText('') } }}
+          />
+          <button
+            style={{ ...s.steerBtn, background: accent, opacity: steerText.trim() ? 1 : 0.5 }}
+            onClick={() => { if (steerText.trim()) { onSteer(steerText.trim()); setSteerText('') } }}
+            disabled={!steerText.trim()}
+          >换</button>
+        </div>
+      )}
+
       <div style={s.volRow}>
         <span style={{ fontSize: 13 }}>🔈</span>
         <input type="range" min={0} max={100} value={vol}
@@ -154,4 +172,7 @@ const s = {
   volRow: { display: 'flex', alignItems: 'center', gap: 8, width: '100%' },
   vibeRow: { display: 'flex', gap: 6, width: '100%', justifyContent: 'center', flexWrap: 'wrap' },
   vibeBtn: { padding: '6px 10px', borderRadius: 16, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', color: '#e5e7eb', fontSize: 12, cursor: 'pointer', whiteSpace: 'nowrap' },
+  steerRow: { display: 'flex', gap: 6, width: '100%' },
+  steerInput: { flex: 1, minWidth: 0, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, padding: '8px 12px', color: '#f9fafb', fontSize: 13, outline: 'none' },
+  steerBtn: { flexShrink: 0, padding: '0 14px', borderRadius: 10, border: 'none', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer' },
 }
