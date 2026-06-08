@@ -26,6 +26,7 @@ export default function App() {
   const [llmReady, setLlmReady] = useState(hasLLMKey())  // 是否已配置 AI key
   const [showSetup, setShowSetup] = useState(false)      // 手动重开设置/引导
   const [toast, setToast] = useState('')
+  const [update, setUpdate] = useState(null)   // { state, version, percent }
   const [error, setError] = useState('')
   const toastTimer = useRef(null)
   const showToast = useCallback((msg) => {
@@ -89,6 +90,9 @@ export default function App() {
       setLlmReady(hasLLMKey())
     }).catch(() => setLlmReady(hasLLMKey()))
   }, [])
+
+  // 自动更新状态
+  useEffect(() => { window.electronAPI.onUpdateStatus?.(setUpdate) }, [])
 
   // 登录后拉取用户收藏（"我喜欢"等），用于个性化推荐
   useEffect(() => {
@@ -567,6 +571,16 @@ export default function App() {
 
       {error && <div style={styles.errBanner} onClick={() => setError('')}>⚠️ {error} <span style={{ opacity: .5, fontSize: 11 }}>点击关闭</span></div>}
 
+      {update && (
+        <div style={{ ...styles.updateBanner, borderColor: `${accent}66` }}>
+          {update.state === 'downloaded'
+            ? <>🎉 新版本 v{update.version} 已就绪 <button style={{ ...styles.updateBtn, background: accent }} onClick={() => window.electronAPI.installUpdate()}>重启更新</button></>
+            : update.state === 'downloading'
+              ? <>⬇️ 正在下载新版本… {update.percent ?? 0}%</>
+              : <>✨ 发现新版本 v{update.version}，下载中…</>}
+        </div>
+      )}
+
       <div style={styles.content}>
         <MoodInput onStart={startRadio} isLoading={isLoading} isActive={!!currentTrack} moodConfig={moodConfig} />
         <NowPlaying
@@ -607,4 +621,6 @@ const styles = {
   errBanner: { position: 'fixed', top: 44, left: '50%', transform: 'translateX(-50%)', background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.3)', color: '#fca5a5', fontSize: 13, padding: '8px 20px', borderRadius: 8, zIndex: 200, cursor: 'pointer', backdropFilter: 'blur(12px)', whiteSpace: 'nowrap' },
   content: { flex: 1, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, padding: 24, alignItems: 'start', position: 'relative', zIndex: 10, overflowY: 'auto' },
   toast: { position: 'fixed', bottom: 96, left: '50%', transform: 'translate(-50%,8px)', background: 'rgba(10,10,10,0.9)', border: '1px solid rgba(255,255,255,0.12)', color: '#f9fafb', fontSize: 13, padding: '8px 18px', borderRadius: 20, zIndex: 300, pointerEvents: 'none', transition: 'opacity .25s, transform .25s', backdropFilter: 'blur(12px)' },
+  updateBanner: { position: 'fixed', top: 48, left: '50%', transform: 'translateX(-50%)', background: 'rgba(10,10,10,0.92)', border: '1px solid', color: '#f9fafb', fontSize: 13, padding: '8px 16px', borderRadius: 10, zIndex: 250, display: 'flex', alignItems: 'center', gap: 10, backdropFilter: 'blur(12px)', whiteSpace: 'nowrap' },
+  updateBtn: { padding: '5px 12px', borderRadius: 8, border: 'none', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer' },
 }

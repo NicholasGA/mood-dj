@@ -1,6 +1,7 @@
 const { app, BrowserWindow, ipcMain, net, protocol, screen, shell } = require('electron')
 const path = require('path')
 const fs = require('fs')
+const { autoUpdater } = require('electron-updater')
 
 // 主进程日志落盘，方便排查（dev 下 concurrently 会吞掉 stdout）
 const dlog = (...args) => {
@@ -96,7 +97,23 @@ app.whenReady().then(() => {
     }
   })
   createWindow()
+  setupAutoUpdate()
 })
+
+// ── 自动更新（electron-updater，从 GitHub Releases 检查）──────────────
+function sendUpdate(payload) { try { mainWindow?.webContents.send('update-status', payload) } catch {} }
+function setupAutoUpdate() {
+  if (isDev) return
+  autoUpdater.autoDownload = true
+  autoUpdater.autoInstallOnAppQuit = true
+  autoUpdater.on('update-available', (i) => { dlog('[update] available', i.version); sendUpdate({ state: 'available', version: i.version }) })
+  autoUpdater.on('download-progress', (p) => sendUpdate({ state: 'downloading', percent: Math.round(p.percent) }))
+  autoUpdater.on('update-downloaded', (i) => { dlog('[update] downloaded', i.version); sendUpdate({ state: 'downloaded', version: i.version }) })
+  autoUpdater.on('update-not-available', () => dlog('[update] up to date'))
+  autoUpdater.on('error', (e) => dlog('[update] error', e.message))
+  autoUpdater.checkForUpdates().catch(e => dlog('[update] check failed', e.message))
+}
+ipcMain.handle('install-update', () => { autoUpdater.quitAndInstall() })
 
 // ── QQ Music auth via cookie capture ──────────────────────────────
 ipcMain.handle('qq-auth', () => {

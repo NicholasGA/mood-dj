@@ -15,6 +15,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getConfig:           () => ipcRenderer.invoke('get-config'),
   storeConfig:         (v) => ipcRenderer.invoke('store-config', v),
   openExternal:        (url) => ipcRenderer.invoke('open-external', url),
+  onUpdateStatus:      (cb) => ipcRenderer.on('update-status', (_e, data) => cb(data)),
+  installUpdate:       () => ipcRenderer.invoke('install-update'),
   // Window
   minimize: () => ipcRenderer.send('win-minimize'),
   maximize: () => ipcRenderer.send('win-maximize'),

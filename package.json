@@ -14,13 +14,29 @@
   "build": {
     "appId": "com.mooddj.app",
     "productName": "Mood DJ",
-    "directories": { "output": "release" },
-    "files": ["electron.js", "preload.js", "dist/**/*"],
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "electron.js",
+      "preload.js",
+      "dist/**/*"
+    ],
     "win": {
       "icon": "build/icon.png",
       "target": [
-        { "target": "nsis", "arch": ["x64"] },
-        { "target": "portable", "arch": ["x64"] }
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
       ]
     },
     "nsis": {
@@ -35,6 +51,7 @@
     }
   },
   "dependencies": {
+    "electron-updater": "^6.8.9",
     "react": "^18.3.0",
     "react-dom": "^18.3.0"
   },
