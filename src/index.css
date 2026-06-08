@@ -1,0 +1,51 @@
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --accent: #7c3aed;
+  --accent2: #4f46e5;
+}
+
+html, body, #root {
+  height: 100%;
+  background: #0a0a0a;
+  color: #f9fafb;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Mood slider custom style */
+.mood-slider {
+  -webkit-appearance: none;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(255,255,255,0.12);
+  outline: none;
+  cursor: pointer;
+}
+.mood-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--accent, #7c3aed);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--accent, #7c3aed) 60%, transparent);
+  transition: transform .15s;
+}
+.mood-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.25);
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar { width: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 3px; }
+
+/* Disc spin animation */
+@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+/* Drag region for title bar */
+.drag-region { -webkit-app-region: drag; }
+.no-drag { -webkit-app-region: no-drag; }
+
+button:disabled { opacity: 0.45; cursor: not-allowed; }
+button:not(:disabled):hover { opacity: 0.85; }

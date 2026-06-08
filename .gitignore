@@ -1,0 +1,16 @@
+# 依赖
+node_modules/
+
+# 构建产物
+dist/
+
+# 环境变量（含密钥，切勿提交）
+.env
+
+# 运行时/调试
+debug.log
+*.log
+
+# 系统
+.DS_Store
+Thumbs.db

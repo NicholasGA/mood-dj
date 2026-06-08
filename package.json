@@ -1,0 +1,23 @@
+{
+  "name": "spotify-mood-dj",
+  "version": "1.0.0",
+  "description": "AI-powered mood-based Spotify DJ radio",
+  "main": "electron.js",
+  "scripts": {
+    "dev": "concurrently \"vite\" \"wait-on http://localhost:5173 && cross-env ELECTRON_DEV=true electron .\"",
+    "build": "vite build",
+    "start": "cross-env ELECTRON_DEV=true electron ."
+  },
+  "dependencies": {
+    "react": "^18.3.0",
+    "react-dom": "^18.3.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.0",
+    "concurrently": "^9.0.0",
+    "cross-env": "^7.0.3",
+    "electron": "^32.3.3",
+    "vite": "^5.4.0",
+    "wait-on": "^8.0.0"
+  }
+}
