@@ -500,7 +500,7 @@ export default function App() {
       setLikedCount(mem.likedTracks.length)
     }
     showToast('❤️ 已加入「我喜欢的」')   // 本地一定成功，可随时在喜欢列表重听
-    // QQ"我喜欢"同步best-effort：QQ 库里有的歌(含多数外文)能成，真·灰色歌(80105)会跳过
+    // QQ"我喜欢"同步best-effort：多数歌能成；少数歌 QQ 因版权不允许收藏(80105)，跳过不打扰
     if (cur.id) window.electronAPI.addQQFavorite(Number(cur.id)).then(ok => { if (ok) showToast('❤️ 已同步到 QQ 我喜欢') }).catch(() => {})
   }
 
@@ -515,7 +515,7 @@ export default function App() {
       catch { fail++ }
       await new Promise(r => setTimeout(r, 280))
     }
-    showToast(fail ? `✅ 同步 ${ok} 首；${fail} 首 QQ 库里没有，已跳过` : `✅ ${ok} 首已同步到 QQ 我喜欢`)
+    showToast(fail ? `✅ 已同步 ${ok} 首；${fail} 首 QQ 因版权不允许收藏，跳过` : `✅ ${ok} 首已同步到 QQ 我喜欢`)
   }
 
   // 从喜欢的歌里统计常听歌手，作为口味信号
