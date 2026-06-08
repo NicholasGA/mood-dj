@@ -7,6 +7,8 @@
   "scripts": {
     "dev": "concurrently \"vite\" \"wait-on http://localhost:5173 && cross-env ELECTRON_DEV=true electron .\"",
     "build": "vite build",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "start": "cross-env ELECTRON_DEV=true electron .",
     "dist": "vite build && electron-builder --win",
     "dist:dir": "vite build && electron-builder --win --dir"
@@ -15,7 +17,12 @@
     "appId": "com.mooddj.app",
     "productName": "Mood DJ",
     "publish": [
-      { "provider": "github", "owner": "NicholasGA", "repo": "mood-dj", "releaseType": "release" }
+      {
+        "provider": "github",
+        "owner": "NicholasGA",
+        "repo": "mood-dj",
+        "releaseType": "release"
+      }
     ],
     "directories": {
       "output": "release"
@@ -65,6 +72,7 @@
     "electron": "^32.3.3",
     "electron-builder": "^26.15.2",
     "vite": "^5.4.0",
+    "vitest": "^4.1.8",
     "wait-on": "^8.0.0"
   }
 }

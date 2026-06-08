@@ -1,7 +1,7 @@
 function cookieStr(cookies) {
   return (cookies || []).map(c => `${c.name}=${c.value}`).join('; ')
 }
-function getUin(cookies) {
+export function getUin(cookies) {
   const pick = (name) => (cookies || []).find(c => c.name === name && c.value && c.value !== '0')?.value
   const raw = pick('uin') || pick('wxuin')  // QQ 登录在 uin，微信登录在 wxuin
   return raw ? raw.replace(/^o0*/, '') : '0'
@@ -17,7 +17,7 @@ const HEADERS = (cookies) => ({
 })
 
 // QQ 歌曲对象 → 统一 track 形状（搜索/歌单通用）
-function mapSong(s) {
+export function mapSong(s) {
   if (!s?.mid) return null
   return {
     id: String(s.id ?? s.mid),
@@ -113,7 +113,7 @@ export function parseLRC(lrc) {
 
 // 副歌检测（纯文本启发式，非精确）：以出现最多的"钩子行"为锚，标记钩子及其紧邻高重复行，
 // 段落起点作为跳转点。若标记过多(>45%，说明全曲高度重复无法区分)则撤销标记、仅保留跳转。
-function detectChoruses(lines) {
+export function detectChoruses(lines) {
   const norm = (t) => (t || '').replace(/\s+/g, '').toLowerCase()
   const N = lines.length
   const keys = lines.map(l => norm(l.text))

@@ -1,5 +1,5 @@
 // 运行时可配置（打包分发后由用户在应用内填写）；.env 仅作开发默认值
-const splitKeys = (s) => (s || '').split(',').map(x => x.trim()).filter(Boolean)
+export const splitKeys = (s) => (s || '').split(',').map(x => x.trim()).filter(Boolean)
 let GEMINI_KEYS = splitKeys(import.meta.env.VITE_GEMINI_API_KEY)
 let MODEL = import.meta.env.VITE_GEMINI_MODEL || 'gemini-2.5-flash-lite'
 let OPENROUTER_KEY = import.meta.env.VITE_OPENROUTER_API_KEY || ''
@@ -109,7 +109,7 @@ export async function analyzeMood(text, energy, valence, platform = 'qq') {
 }
 
 // 本地意图解析（不依赖 AI，Gemini 挂了/限流也能用）：剥掉指令词，拆出歌手与心情
-function localInterpret(text) {
+export function localInterpret(text) {
   let s = (text || '').trim()
   s = s.replace(/^(请|帮我|给我|我想听|我要听|我想|我要|想听|来听|放点|来点|听点|放首|来首|来个|换成|换点|整点|放|听|想|要)+/g, '')
   s = s.replace(/(的歌曲?|的音乐|的曲子?|的|吧|嘛|啊|呗|哦|喔|呀)+$/g, '').trim()
