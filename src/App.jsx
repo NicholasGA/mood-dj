@@ -23,7 +23,14 @@ export default function App() {
   const [lyric, setLyric] = useState({ lines: [], choruses: [], hasTrans: false })
   const [miniMode, setMiniMode] = useState(false)
   const [favCount, setFavCount] = useState(0)   // 已接入的收藏数（仅用于 UI 提示）
+  const [toast, setToast] = useState('')
   const [error, setError] = useState('')
+  const toastTimer = useRef(null)
+  const showToast = useCallback((msg) => {
+    setToast(msg)
+    clearTimeout(toastTimer.current)
+    toastTimer.current = setTimeout(() => setToast(''), 2200)
+  }, [])
 
   const audioRef = useRef(new Audio())
   const queueRef = useRef([])
@@ -158,7 +165,8 @@ export default function App() {
     if (replenishPromiseRef.current) return replenishPromiseRef.current   // 复用进行中的，避免竞态
     const run = async () => {
       const fresh = []
-      const add = (arr) => { for (const t of arr || []) if (t?.mid && !ctx.seen.has(t.mid)) { ctx.seen.add(t.mid); fresh.push(t) } }
+      const disliked = (t) => ctx.disliked && (t.artists || []).some(a => ctx.disliked.has(a.name))
+      const add = (arr) => { for (const t of arr || []) if (t?.mid && !ctx.seen.has(t.mid) && !disliked(t)) { ctx.seen.add(t.mid); fresh.push(t) } }
       // 1) 单曲搜索：随机翻页（页码范围更大，避开热门）
       await Promise.allSettled(ctx.queries.map(q =>
         searchTracks(qqCookiesRef.current, q, 15, 1 + Math.floor(Math.random() * 8)).then(add).catch(() => {})))
@@ -324,8 +332,8 @@ export default function App() {
 
       if (allTracks.length === 0) throw new Error('未找到匹配曲目，请换个描述')
 
-      // 存电台上下文，供无限补歌复用
-      radioRef.current = { queries, playlistIds, seen }
+      // 存电台上下文，供无限补歌 + 实时调味复用
+      radioRef.current = { queries, playlistIds, seen, energy, valence, disliked: new Set() }
 
       // AI 精排：按心情 + 你的口味挑选排序；失败则回退随机洗牌
       try {
@@ -352,6 +360,54 @@ export default function App() {
   function toggleMini(on) {
     window.electronAPI.setMini(on)
     setMiniMode(on)
+  }
+
+  // 播放中实时调味：把新 vibe 的歌插到队首，立即生效（不重开台、不耗 Gemini）
+  const VIBE = {
+    up:     { key: '燃 快节奏 嗨曲', dE: 0.2, toast: '🔥 更带劲了' },
+    down:   { key: '安静 慢歌 治愈', dE: -0.2, toast: '🌙 冷静下来' },
+    flavor: { key: '', dE: 0, toast: '🔀 换个味道' },
+  }
+  async function adjustVibe(mode) {
+    const ctx = radioRef.current
+    if (!ctx) return
+    const v = VIBE[mode]
+    if (v.dE) {
+      ctx.energy = Math.min(1, Math.max(0, (ctx.energy ?? 0.5) + v.dE))
+      setMoodConfig(m => (m ? { ...m, energy: ctx.energy } : m))
+    }
+    setLoadingTrack(true)
+    try {
+      const fresh = []
+      const disliked = (t) => ctx.disliked && (t.artists || []).some(a => ctx.disliked.has(a.name))
+      const add = (arr) => { for (const t of arr || []) if (t?.mid && !ctx.seen.has(t.mid) && !disliked(t)) { ctx.seen.add(t.mid); fresh.push(t) } }
+      await Promise.allSettled((ctx.queries || []).map(q =>
+        searchTracks(qqCookiesRef.current, v.key ? `${q} ${v.key}` : q, 15, 1 + Math.floor(Math.random() * 5)).then(add).catch(() => {})))
+      if (mode === 'flavor') {
+        try {
+          const pls = await searchPlaylists(qqCookiesRef.current, (ctx.queries || ['流行'])[Math.floor(Math.random() * ctx.queries.length)], 10)
+          const np = pls.find(p => !ctx.playlistIds.includes(p.id))
+          if (np) { ctx.playlistIds.push(np.id); await getPlaylistTracks(qqCookiesRef.current, np.id, 50).then(add).catch(() => {}) }
+        } catch {}
+      }
+      if (fresh.length) {
+        fresh.sort(() => Math.random() - 0.5)
+        const merged = [...fresh, ...queueRef.current]   // 新味道排队首，下一首即生效
+        queueRef.current = merged; setQueue(merged)
+        showToast(v.toast)
+      } else showToast('没找到更多，再试一次')
+    } finally { setLoadingTrack(false) }
+  }
+
+  function dislikeCurrent() {
+    const ctx = radioRef.current, cur = currentTrackRef.current
+    if (!ctx || !cur) return
+    ctx.disliked = ctx.disliked || new Set()
+    ;(cur.artists || []).forEach(a => ctx.disliked.add(a.name))
+    const filtered = queueRef.current.filter(t => !(t.artists || []).some(a => ctx.disliked.has(a.name)))
+    queueRef.current = filtered; setQueue(filtered)
+    showToast('👎 已跳过，少推这类')
+    playNext()
   }
 
   function logout() {
@@ -417,10 +473,14 @@ export default function App() {
           onTogglePlay={togglePlay}
           lyric={lyric}
           accent={accent}
+          onVibe={adjustVibe}
+          onDislike={dislikeCurrent}
         />
       </div>
 
       <DJAnnouncement text={announcement} visible={showAnnouncement} />
+
+      <div style={{ ...styles.toast, opacity: toast ? 1 : 0, transform: toast ? 'translate(-50%,0)' : 'translate(-50%,8px)' }}>{toast}</div>
     </div>
   )
 }
@@ -438,4 +498,5 @@ const styles = {
   wBtn: { width: 28, height: 22, background: 'rgba(255,255,255,0.07)', border: 'none', color: '#9ca3af', fontSize: 11, cursor: 'pointer', borderRadius: 4 },
   errBanner: { position: 'fixed', top: 44, left: '50%', transform: 'translateX(-50%)', background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.3)', color: '#fca5a5', fontSize: 13, padding: '8px 20px', borderRadius: 8, zIndex: 200, cursor: 'pointer', backdropFilter: 'blur(12px)', whiteSpace: 'nowrap' },
   content: { flex: 1, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, padding: 24, alignItems: 'start', position: 'relative', zIndex: 10, overflowY: 'auto' },
+  toast: { position: 'fixed', bottom: 96, left: '50%', transform: 'translate(-50%,8px)', background: 'rgba(10,10,10,0.9)', border: '1px solid rgba(255,255,255,0.12)', color: '#f9fafb', fontSize: 13, padding: '8px 18px', borderRadius: 20, zIndex: 300, pointerEvents: 'none', transition: 'opacity .25s, transform .25s', backdropFilter: 'blur(12px)' },
 }

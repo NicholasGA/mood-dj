@@ -1,6 +1,7 @@
 {
   "permissions": {
     "allow": [
+      "PowerShell",
       "Bash(npm run *)",
       "PowerShell(npm run build 2>&1)",
       "PowerShell($c = Get-Command node,npm,npx -ErrorAction SilentlyContinue | Select-Object Name,Source; $c | Format-Table -Auto | Out-String; \"PATH node dirs:\"; $env:Path -split ';' | Where-Object { $_ -match 'node' })",

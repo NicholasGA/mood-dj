@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import Lyrics from './Lyrics'
 
-export default function NowPlaying({ track, isPlaying, loadingTrack, audioRef, onNext, queueCount, onTogglePlay, lyric, accent = '#31c27c' }) {
+export default function NowPlaying({ track, isPlaying, loadingTrack, audioRef, onNext, queueCount, onTogglePlay, lyric, accent = '#31c27c', onVibe, onDislike }) {
   const [progress, setProgress] = useState(0)
   const [dur, setDur] = useState(0)
   const [vol, setVol] = useState(80)
@@ -111,6 +111,15 @@ export default function NowPlaying({ track, isPlaying, loadingTrack, audioRef, o
         <span style={s.badge}>队列 {queueCount}</span>
       </div>
 
+      {track && onVibe && (
+        <div style={s.vibeRow}>
+          <button style={s.vibeBtn} onClick={() => onVibe('up')} title="再嗨一点">🔥 再嗨点</button>
+          <button style={s.vibeBtn} onClick={() => onVibe('down')} title="冷静一些">🌙 冷静些</button>
+          <button style={s.vibeBtn} onClick={() => onVibe('flavor')} title="换个味道">🔀 换味道</button>
+          <button style={s.vibeBtn} onClick={onDislike} title="不喜欢这首，少推这类">👎 不喜欢</button>
+        </div>
+      )}
+
       <div style={s.volRow}>
         <span style={{ fontSize: 13 }}>🔈</span>
         <input type="range" min={0} max={100} value={vol}
@@ -143,4 +152,6 @@ const s = {
   btn: { width: 48, height: 48, borderRadius: '50%', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.15)', color: '#fff', fontSize: 20, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' },
   badge: { fontSize: 12, color: '#6b7280', background: 'rgba(255,255,255,0.06)', padding: '4px 10px', borderRadius: 20 },
   volRow: { display: 'flex', alignItems: 'center', gap: 8, width: '100%' },
+  vibeRow: { display: 'flex', gap: 6, width: '100%', justifyContent: 'center', flexWrap: 'wrap' },
+  vibeBtn: { padding: '6px 10px', borderRadius: 16, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', color: '#e5e7eb', fontSize: 12, cursor: 'pointer', whiteSpace: 'nowrap' },
 }
