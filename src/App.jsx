@@ -5,10 +5,9 @@ import NowPlaying from './components/NowPlaying'
 import Visualizer from './components/Visualizer'
 import DJAnnouncement from './components/DJAnnouncement'
 import MiniPlayer from './components/MiniPlayer'
-import LikesPanel from './components/LikesPanel'
 import Icon from './components/Icon'
 import { searchTracks, getSongUrl, getLyric, searchPlaylists, getPlaylistTracks, searchByArtist } from './services/qqMusicApi'
-import { analyzeMood, generateStory, curateTracks, interpretRequest, configureLLM, hasLLMKey, analyzeTaste, clusterLikes } from './services/claudeDJ'
+import { analyzeMood, generateStory, curateTracks, interpretRequest, configureLLM, hasLLMKey, analyzeTaste } from './services/claudeDJ'
 import { localStory, localMoodConfig } from './services/djText'
 import { freshen, pushRecent } from './services/radio'
 import { extractAlbumColors } from './services/albumColor'
@@ -27,8 +26,8 @@ export default function App() {
   const [lyric, setLyric] = useState({ lines: [], choruses: [], hasTrans: false })
   const [miniMode, setMiniMode] = useState(false)
   const [favCount, setFavCount] = useState(0)   // 已接入的 QQ收藏数（仅用于 UI 提示）
-  const [likedCount, setLikedCount] = useState(0)   // 本地"我喜欢的"数量
-  const [showLikes, setShowLikes] = useState(false) // 喜欢列表面板
+  const [likedCount, setLikedCount] = useState(0)   // 本地喜欢数量（喂口味，不再单独展示面板）
+  const [tasteProfile, setTasteProfile] = useState(null)   // AI 音乐画像，无感呈现在主界面
   const [llmReady, setLlmReady] = useState(hasLLMKey())  // 是否已配置 AI key
   const [showSetup, setShowSetup] = useState(false)      // 手动重开设置/引导
   const [toast, setToast] = useState('')
@@ -117,6 +116,19 @@ export default function App() {
     if (!qqCookies) { favRef.current = null; setFavCount(0); return }
     refreshFavCount()
   }, [qqCookies, refreshFavCount])
+
+  // AI 音乐画像：无感呈现在主界面。优先用 QQ「我喜欢」样本（更代表你），否则用 app 喜欢；
+  // 持久化 + 按需生成，几乎零额外配额（命中持久化就不调）
+  useEffect(() => {
+    if (tasteProfile) return
+    if (memoryRef.current.homeProfile) { setTasteProfile(memoryRef.current.homeProfile); return }
+    const sample = favRef.current?.sample || []
+    const pool = sample.length >= 8 ? sample : memoryRef.current.likedTracks
+    if (!pool || pool.length < 5) return
+    analyzeTaste(pool).then(p => {
+      if (p?.personality) { memoryRef.current.homeProfile = p; saveMemory(); setTasteProfile(p) }
+    }).catch(() => {})
+  }, [favCount, qqCookies, tasteProfile])
 
   // 当前歌曲变化时，从封面提取主题色（失败则回退心情色）
   useEffect(() => {
@@ -508,74 +520,11 @@ export default function App() {
     if (cur.id) window.electronAPI.addQQFavorite(Number(cur.id)).then(ok => { if (ok) { showToast('❤️ 已同步到 QQ 我喜欢'); refreshFavCount() } }).catch(() => {})
   }
 
-  // 一键把本地「喜欢」批量同步到 QQ 我喜欢：QQ 库里有的会成，灰色歌跳过；逐首限速避免限流
-  async function syncLikesToQQ() {
-    const likes = memoryRef.current.likedTracks.filter(t => t.id)
-    if (!likes.length) { showToast('还没有可同步的喜欢'); return }
-    showToast(`⏳ 正在同步 ${likes.length} 首到 QQ 我喜欢…`)
-    let ok = 0, fail = 0
-    for (const t of likes) {
-      try { (await window.electronAPI.addQQFavorite(Number(t.id))) ? ok++ : fail++ }
-      catch { fail++ }
-      await new Promise(r => setTimeout(r, 280))
-    }
-    showToast(fail ? `✅ 已同步 ${ok} 首；${fail} 首没成（多为下架/灰色歌）` : `✅ ${ok} 首已同步到 QQ 我喜欢`)
-    if (ok) refreshFavCount()   // 同步后刷新左上角 QQ 收藏数
-  }
-
   // 从喜欢的歌里统计常听歌手，作为口味信号
   const likedArtists = () => {
     const c = {}
     memoryRef.current.likedTracks.forEach(t => (t.artists || []).forEach(a => { c[a.name] = (c[a.name] || 0) + 1 }))
     return Object.entries(c).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([n]) => n)
-  }
-
-  // 播放"我喜欢的"：点某首从它开始放，其余接在后面（新→旧）
-  function playLiked(track) {
-    const likes = memoryRef.current.likedTracks
-    if (!likes.length) return
-    const rest = likes.filter(t => t.mid !== track?.mid).reverse()
-    const ordered = track ? [track, ...rest] : likes.slice().reverse()
-    queueRef.current = ordered
-    setQueue(ordered)
-    setShowLikes(false)
-    playNext()
-  }
-  // 取消喜欢（从本地列表移除）
-  function removeLiked(mid) {
-    const mem = memoryRef.current
-    mem.likedTracks = mem.likedTracks.filter(t => t.mid !== mid)
-    saveMemory()
-    setLikedCount(mem.likedTracks.length)
-  }
-
-  // 播放一个自动分组
-  function playGroup(tracks) {
-    if (!tracks?.length) return
-    queueRef.current = tracks.slice(); setQueue(tracks.slice())
-    setShowLikes(false)
-    playNext()
-  }
-
-  // 喜欢集合的指纹：数量 + 最后一首 mid。口味没变就复用缓存，不再花 AI 配额
-  function likesSig() {
-    const l = memoryRef.current.likedTracks
-    return l.length ? `${l.length}:${l[l.length - 1].mid}` : '0'
-  }
-  // 画像/分组都按指纹缓存，并持久化到 memory（关闭面板/重开/重启都不重复调用）
-  async function getLikesProfile() {
-    const sig = likesSig(), c = memoryRef.current.likesCache || {}
-    if (c.profileSig === sig && c.profile) return c.profile
-    const p = await analyzeTaste(memoryRef.current.likedTracks)
-    memoryRef.current.likesCache = { ...c, profileSig: sig, profile: p }; saveMemory()
-    return p
-  }
-  async function getLikesGroups() {
-    const sig = likesSig(), c = memoryRef.current.likesCache || {}
-    if (c.groupsSig === sig && c.groups) return c.groups
-    const g = await clusterLikes(memoryRef.current.likedTracks)
-    memoryRef.current.likesCache = { ...c, groupsSig: sig, groups: g }; saveMemory()
-    return g
   }
 
   // 对话点歌：解析意图（歌手/关键词）→ 歌手按本人搜、关键词按曲风搜 → 新点的排队首，保留当前曲
@@ -672,8 +621,7 @@ export default function App() {
       <div style={styles.titleBar}>
         <span style={styles.appName}><Icon name="headphones" size={17} color={accent} strokeWidth={2.2} /> Mood DJ</span>
         {moodConfig && <span style={{ ...styles.tag, background: `${accent}33`, color: accent }}>{moodConfig.mood_name}</span>}
-        {favCount > 0 && <span style={styles.favTag} title="已接入你的 QQ音乐收藏，推荐会参考你的口味"><Icon name="heart" size={11} color="#f9a8d4" filled /> QQ收藏 {favCount}</span>}
-        <button style={{ ...styles.likesBtn, ...styles.noDragBtn }} onClick={() => setShowLikes(true)} title="我在 app 里喜欢过的歌，点开可重听"><Icon name="heart" size={12} color="#f472b6" filled /> 我喜欢的 {likedCount}</button>
+        {favCount > 0 && <span style={styles.favTag} title="已接入你的 QQ音乐收藏；❤️ 的歌会同步到这里，推荐与画像都参考它"><Icon name="heart" size={11} color="#f9a8d4" filled /> QQ收藏 {favCount}</span>}
         <div style={styles.winCtrl}>
           <span style={styles.user} onClick={logout} title="退出登录">QQ音乐 ✕</span>
           <button style={styles.wBtn} onClick={() => setShowSetup(true)} title="设置 / API Key"><Icon name="settings" size={15} color="#9ca3af" /></button>
@@ -699,7 +647,7 @@ export default function App() {
       )}
 
       <div style={styles.content}>
-        <MoodInput onStart={startRadio} isLoading={isLoading} isActive={!!currentTrack} moodConfig={moodConfig} />
+        <MoodInput onStart={startRadio} isLoading={isLoading} isActive={!!currentTrack} moodConfig={moodConfig} taste={tasteProfile} />
         <NowPlaying
           track={currentTrack}
           isPlaying={isPlaying}
@@ -720,22 +668,6 @@ export default function App() {
       <DJAnnouncement text={announcement} visible={showAnnouncement} speak={djSpeak} audioRef={audioRef} />
 
       <div style={{ ...styles.toast, opacity: toast ? 1 : 0, transform: toast ? 'translate(-50%,0)' : 'translate(-50%,8px)' }}>{toast}</div>
-
-      {showLikes && (
-        <LikesPanel
-          likedTracks={memoryRef.current.likedTracks}
-          accent={accent}
-          onClose={() => setShowLikes(false)}
-          onPlayTrack={playLiked}
-          onRemove={removeLiked}
-          onPlayGroup={playGroup}
-          onSyncQQ={syncLikesToQQ}
-          onGenProfile={getLikesProfile}
-          onGenGroups={getLikesGroups}
-          initialProfile={memoryRef.current.likesCache?.profileSig === likesSig() ? memoryRef.current.likesCache.profile : null}
-          initialGroups={memoryRef.current.likesCache?.groupsSig === likesSig() ? memoryRef.current.likesCache.groups : null}
-        />
-      )}
     </div>
   )
 }

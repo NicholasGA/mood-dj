@@ -29,7 +29,7 @@ const PRESET_MOODS = [
   { label: '浪漫', icon: 'heart', color: '#f472b6', filled: true, text: '想听些浪漫温柔的情歌', energy: 0.4, valence: 0.7 },
 ]
 
-export default function MoodInput({ onStart, isLoading, isActive, moodConfig }) {
+export default function MoodInput({ onStart, isLoading, isActive, moodConfig, taste }) {
   const [text, setText] = useState('')
   const [energy, setEnergy] = useState(0.5)
   const [valence, setValence] = useState(0.5)
@@ -58,6 +58,13 @@ export default function MoodInput({ onStart, isLoading, isActive, moodConfig }) 
   return (
     <div style={styles.panel} className="fade-up">
       <h2 style={styles.heading}>今日心情</h2>
+
+      {taste?.personality && (
+        <div style={styles.taste} title="AI 读你的口味，挑歌与串场都会照着来">
+          <Icon name="sparkles" size={14} color={accent} />
+          <span style={styles.tasteText}>{taste.personality}</span>
+        </div>
+      )}
 
       <div style={{ ...styles.suggest, borderColor: `${accent}55`, background: `linear-gradient(120deg, ${accent}22, rgba(255,255,255,0.03))` }}>
         <span style={styles.suggestEmoji}>{sug.emoji}</span>
@@ -150,6 +157,8 @@ const styles = {
     boxShadow: '0 24px 60px rgba(0,0,0,0.4)',
   },
   heading: { fontSize: 18, fontWeight: 700, color: '#f9fafb', margin: 0 },
+  taste: { display: 'flex', alignItems: 'center', gap: 7, marginTop: -8, fontSize: 12.5, color: '#cbd5e1', fontWeight: 500, lineHeight: 1.4 },
+  tasteText: { opacity: 0.92 },
   suggest: { display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px', borderRadius: 14, border: '1px solid' },
   suggestEmoji: { fontSize: 24, flexShrink: 0 },
   suggestBody: { flex: 1, minWidth: 0 },
