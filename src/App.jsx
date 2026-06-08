@@ -103,16 +103,20 @@ export default function App() {
   // 自动更新状态
   useEffect(() => { window.electronAPI.onUpdateStatus?.(setUpdate) }, [])
 
-  // 登录后拉取用户收藏（"我喜欢"等），用于个性化推荐
-  useEffect(() => {
-    if (!qqCookies) { favRef.current = null; setFavCount(0); return }
+  // 拉取/刷新 QQ 收藏（"我喜欢"等）：更新个性化样本 + 左上角收藏数
+  const refreshFavCount = useCallback(() => {
     window.electronAPI.getQQFavorites().then(f => {
       if (f && (f.sample?.length || f.playlistIds?.length)) {
         favRef.current = f
         setFavCount(f.favCount || f.sample?.length || 0)
       }
     }).catch(() => {})
-  }, [qqCookies])
+  }, [])
+  // 登录后拉取，用于个性化推荐
+  useEffect(() => {
+    if (!qqCookies) { favRef.current = null; setFavCount(0); return }
+    refreshFavCount()
+  }, [qqCookies, refreshFavCount])
 
   // 当前歌曲变化时，从封面提取主题色（失败则回退心情色）
   useEffect(() => {
@@ -501,7 +505,7 @@ export default function App() {
     }
     showToast('❤️ 已加入「我喜欢的」')   // 本地一定成功，可随时在喜欢列表重听
     // QQ"我喜欢"同步：主进程走签名版 musics.fcg，绝大多数歌（含以前 80105 的）都能成；个别下架/灰色歌跳过不打扰
-    if (cur.id) window.electronAPI.addQQFavorite(Number(cur.id)).then(ok => { if (ok) showToast('❤️ 已同步到 QQ 我喜欢') }).catch(() => {})
+    if (cur.id) window.electronAPI.addQQFavorite(Number(cur.id)).then(ok => { if (ok) { showToast('❤️ 已同步到 QQ 我喜欢'); refreshFavCount() } }).catch(() => {})
   }
 
   // 一键把本地「喜欢」批量同步到 QQ 我喜欢：QQ 库里有的会成，灰色歌跳过；逐首限速避免限流
@@ -516,6 +520,7 @@ export default function App() {
       await new Promise(r => setTimeout(r, 280))
     }
     showToast(fail ? `✅ 已同步 ${ok} 首；${fail} 首没成（多为下架/灰色歌）` : `✅ ${ok} 首已同步到 QQ 我喜欢`)
+    if (ok) refreshFavCount()   // 同步后刷新左上角 QQ 收藏数
   }
 
   // 从喜欢的歌里统计常听歌手，作为口味信号
