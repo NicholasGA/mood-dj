@@ -134,7 +134,7 @@ export default function App() {
         if (p?.personality) { memoryRef.current.homeProfile = p; saveMemory(); setTasteProfile(p) }  // 真画像才持久化
         else { const l = local(); if (l) setTasteProfile(l) }
       })
-      .catch(() => { const l = local(); if (l) setTasteProfile(l) })   // 兜底不持久化，下次有配额再生成真画像
+      .catch(() => { const l = local(); if (l) setTasteProfile(l) })   // AI 不可用(配额/网络) → 本地兜底，不持久化，下次有配额再生成真画像
   }, [favCount, qqCookies, tasteProfile])
 
   // 当前歌曲变化时，从封面提取主题色（失败则回退心情色）
