@@ -5,6 +5,7 @@ import NowPlaying from './components/NowPlaying'
 import Visualizer from './components/Visualizer'
 import DJAnnouncement from './components/DJAnnouncement'
 import MiniPlayer from './components/MiniPlayer'
+import Icon from './components/Icon'
 import { searchTracks, getSongUrl, getLyric, searchPlaylists, getPlaylistTracks, searchByArtist } from './services/qqMusicApi'
 import { analyzeMood, generateAnnouncement, curateTracks, interpretRequest, configureLLM, hasLLMKey } from './services/claudeDJ'
 import { extractAlbumColors } from './services/albumColor'
@@ -22,7 +23,9 @@ export default function App() {
   const [albumColors, setAlbumColors] = useState(null)
   const [lyric, setLyric] = useState({ lines: [], choruses: [], hasTrans: false })
   const [miniMode, setMiniMode] = useState(false)
-  const [favCount, setFavCount] = useState(0)   // 已接入的收藏数（仅用于 UI 提示）
+  const [favCount, setFavCount] = useState(0)   // 已接入的 QQ收藏数（仅用于 UI 提示）
+  const [likedCount, setLikedCount] = useState(0)   // 本地"我喜欢的"数量
+  const [showLikes, setShowLikes] = useState(false) // 喜欢列表面板
   const [llmReady, setLlmReady] = useState(hasLLMKey())  // 是否已配置 AI key
   const [showSetup, setShowSetup] = useState(false)      // 手动重开设置/引导
   const [toast, setToast] = useState('')
@@ -80,6 +83,7 @@ export default function App() {
   useEffect(() => {
     window.electronAPI.getMemory().then(m => {
       if (m) memoryRef.current = { likedTracks: m.likedTracks || [], dislikedArtists: m.dislikedArtists || [] }
+      setLikedCount(memoryRef.current.likedTracks.length)
     }).catch(() => {})
   }, [])
 
@@ -450,8 +454,9 @@ export default function App() {
     if (!mem.likedTracks.some(t => t.mid === cur.mid)) {
       mem.likedTracks.push({ id: cur.id, mid: cur.mid, media_mid: cur.media_mid, name: cur.name, artists: cur.artists, album: cur.album })
       saveMemory()
+      setLikedCount(mem.likedTracks.length)
     }
-    showToast('❤️ 已收藏')   // 本地记忆一定成功（喂个性化推荐）
+    showToast('❤️ 已加入「我喜欢的」')   // 本地一定成功，可随时在喜欢列表重听
     // QQ"我喜欢"同步best-effort：很多歌(尤其日文/灰色)QQ接口会拒(80105)，成了就提示，没成不打扰
     if (cur.id) window.electronAPI.addQQFavorite(Number(cur.id)).then(ok => { if (ok) showToast('❤️ 已同步到 QQ 我喜欢') }).catch(() => {})
   }
@@ -461,6 +466,25 @@ export default function App() {
     const c = {}
     memoryRef.current.likedTracks.forEach(t => (t.artists || []).forEach(a => { c[a.name] = (c[a.name] || 0) + 1 }))
     return Object.entries(c).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([n]) => n)
+  }
+
+  // 播放"我喜欢的"：点某首从它开始放，其余接在后面（新→旧）
+  function playLiked(track) {
+    const likes = memoryRef.current.likedTracks
+    if (!likes.length) return
+    const rest = likes.filter(t => t.mid !== track?.mid).reverse()
+    const ordered = track ? [track, ...rest] : likes.slice().reverse()
+    queueRef.current = ordered
+    setQueue(ordered)
+    setShowLikes(false)
+    playNext()
+  }
+  // 取消喜欢（从本地列表移除）
+  function removeLiked(mid) {
+    const mem = memoryRef.current
+    mem.likedTracks = mem.likedTracks.filter(t => t.mid !== mid)
+    saveMemory()
+    setLikedCount(mem.likedTracks.length)
   }
 
   // 对话点歌：解析意图（歌手/关键词）→ 歌手按本人搜、关键词按曲风搜 → 新点的排队首，保留当前曲
@@ -555,13 +579,14 @@ export default function App() {
       {ambientArt && <img src={ambientArt} alt="" aria-hidden style={styles.ambient} key={ambientArt} />}
       {ambientArt && <div style={styles.ambientVeil} aria-hidden />}
       <div style={styles.titleBar}>
-        <span style={styles.appName}>Mood DJ {moodConfig?.mood_emoji || '🎵'}</span>
+        <span style={styles.appName}><Icon name="headphones" size={17} color={accent} strokeWidth={2.2} /> Mood DJ</span>
         {moodConfig && <span style={{ ...styles.tag, background: `${accent}33`, color: accent }}>{moodConfig.mood_name}</span>}
-        {favCount > 0 && <span style={styles.favTag} title="已接入你的 QQ音乐收藏，推荐会参考你的口味">❤️ 收藏 {favCount}</span>}
+        {favCount > 0 && <span style={styles.favTag} title="已接入你的 QQ音乐收藏，推荐会参考你的口味"><Icon name="heart" size={11} color="#f9a8d4" filled /> QQ收藏 {favCount}</span>}
+        <button style={{ ...styles.likesBtn, ...styles.noDragBtn }} onClick={() => setShowLikes(true)} title="我在 app 里喜欢过的歌，点开可重听"><Icon name="heart" size={12} color="#f472b6" filled /> 我喜欢的 {likedCount}</button>
         <div style={styles.winCtrl}>
           <span style={styles.user} onClick={logout} title="退出登录">QQ音乐 ✕</span>
-          <button style={styles.wBtn} onClick={() => setShowSetup(true)} title="设置 / API Key">⚙</button>
-          <button style={styles.wBtn} onClick={() => toggleMini(true)} title="迷你播放器（置顶小窗）">▭</button>
+          <button style={styles.wBtn} onClick={() => setShowSetup(true)} title="设置 / API Key"><Icon name="settings" size={15} color="#9ca3af" /></button>
+          <button style={styles.wBtn} onClick={() => toggleMini(true)} title="迷你播放器（置顶小窗）"><Icon name="maximize" size={13} color="#9ca3af" /></button>
           <button style={styles.wBtn} onClick={() => window.electronAPI.minimize()}>—</button>
           <button style={styles.wBtn} onClick={() => window.electronAPI.maximize()}>□</button>
           <button style={{ ...styles.wBtn, color: '#f87171' }} onClick={() => window.electronAPI.close()}>✕</button>
@@ -604,6 +629,34 @@ export default function App() {
       <DJAnnouncement text={announcement} visible={showAnnouncement} />
 
       <div style={{ ...styles.toast, opacity: toast ? 1 : 0, transform: toast ? 'translate(-50%,0)' : 'translate(-50%,8px)' }}>{toast}</div>
+
+      {showLikes && (
+        <div style={styles.likesOverlay} onClick={() => setShowLikes(false)}>
+          <div style={styles.likesPanel} className="fade-up" onClick={e => e.stopPropagation()}>
+            <div style={styles.likesHead}>
+              <span style={styles.likesTitle}><Icon name="heart" size={16} color="#f472b6" filled /> 我喜欢的 · {likedCount} 首</span>
+              {likedCount > 0 && <button style={{ ...styles.likesPlayAll, background: accent }} onClick={() => playLiked(null)}><Icon name="play" size={12} color="#fff" /> 全部播放</button>}
+              <button style={styles.likesClose} onClick={() => setShowLikes(false)}>✕</button>
+            </div>
+            <div style={styles.likesList} className="lyrics-scroll">
+              {likedCount === 0
+                ? <div style={styles.likesEmpty}>还没有喜欢的歌～<br />播放时点 ❤️ 喜欢，就会加到这里随时重听</div>
+                : memoryRef.current.likedTracks.slice().reverse().map(t => (
+                  <div key={t.mid} style={styles.likeRow} className="like-row" onClick={() => playLiked(t)}>
+                    {t.album?.images?.[0]?.url
+                      ? <img src={t.album.images[0].url} alt="" style={styles.likeCover} />
+                      : <div style={{ ...styles.likeCover, ...styles.likeCoverPh }}>♪</div>}
+                    <div style={styles.likeMeta}>
+                      <div style={styles.likeName}>{t.name}</div>
+                      <div style={styles.likeArtist}>{t.artists?.map(a => a.name).join(', ')}</div>
+                    </div>
+                    <button style={styles.likeRemove} className="like-remove" title="取消喜欢" onClick={e => { e.stopPropagation(); removeLiked(t.mid) }}>✕</button>
+                  </div>
+                ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -613,15 +666,32 @@ const styles = {
   ambient: { position: 'fixed', inset: '-10%', width: '120%', height: '120%', objectFit: 'cover', filter: 'blur(46px) saturate(1.8) brightness(0.95)', opacity: 0.9, zIndex: 0, pointerEvents: 'none', transform: 'scale(1.1)', animation: 'ambientIn 1.1s ease' },
   ambientVeil: { position: 'fixed', inset: 0, zIndex: 0, pointerEvents: 'none', background: 'radial-gradient(ellipse at 50% 42%, rgba(10,10,10,0.04) 0%, rgba(10,10,10,0.42) 58%, rgba(10,10,10,0.82) 100%)' },
   titleBar: { height: 40, display: 'flex', alignItems: 'center', padding: '0 16px', gap: 12, flexShrink: 0, background: 'rgba(10,10,10,0.85)', backdropFilter: 'blur(12px)', borderBottom: '1px solid rgba(255,255,255,0.06)', zIndex: 50, WebkitAppRegion: 'drag', userSelect: 'none' },
-  appName: { fontSize: 14, fontWeight: 700 },
+  appName: { fontSize: 14, fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 7 },
   tag: { fontSize: 11, padding: '2px 10px', borderRadius: 20, fontWeight: 500 },
-  favTag: { fontSize: 11, padding: '2px 10px', borderRadius: 20, fontWeight: 500, background: 'rgba(244,114,182,0.15)', color: '#f9a8d4' },
+  favTag: { fontSize: 11, padding: '2px 10px', borderRadius: 20, fontWeight: 500, background: 'rgba(244,114,182,0.15)', color: '#f9a8d4', display: 'inline-flex', alignItems: 'center', gap: 4 },
   winCtrl: { marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 4, WebkitAppRegion: 'no-drag' },
   user: { fontSize: 12, color: '#6b7280', marginRight: 8, cursor: 'pointer' },
-  wBtn: { width: 28, height: 22, background: 'rgba(255,255,255,0.07)', border: 'none', color: '#9ca3af', fontSize: 11, cursor: 'pointer', borderRadius: 4 },
+  wBtn: { width: 28, height: 22, background: 'rgba(255,255,255,0.07)', border: 'none', color: '#9ca3af', fontSize: 11, cursor: 'pointer', borderRadius: 4, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' },
   errBanner: { position: 'fixed', top: 44, left: '50%', transform: 'translateX(-50%)', background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.3)', color: '#fca5a5', fontSize: 13, padding: '8px 20px', borderRadius: 8, zIndex: 200, cursor: 'pointer', backdropFilter: 'blur(12px)', whiteSpace: 'nowrap' },
   content: { flex: 1, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, padding: 24, alignItems: 'start', position: 'relative', zIndex: 10, overflowY: 'auto' },
   toast: { position: 'fixed', bottom: 96, left: '50%', transform: 'translate(-50%,8px)', background: 'rgba(10,10,10,0.9)', border: '1px solid rgba(255,255,255,0.12)', color: '#f9fafb', fontSize: 13, padding: '8px 18px', borderRadius: 20, zIndex: 300, pointerEvents: 'none', transition: 'opacity .25s, transform .25s', backdropFilter: 'blur(12px)' },
   updateBanner: { position: 'fixed', top: 48, left: '50%', transform: 'translateX(-50%)', background: 'rgba(10,10,10,0.92)', border: '1px solid', color: '#f9fafb', fontSize: 13, padding: '8px 16px', borderRadius: 10, zIndex: 250, display: 'flex', alignItems: 'center', gap: 10, backdropFilter: 'blur(12px)', whiteSpace: 'nowrap' },
   updateBtn: { padding: '5px 12px', borderRadius: 8, border: 'none', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer' },
+  noDragBtn: { WebkitAppRegion: 'no-drag' },
+  likesBtn: { display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11, padding: '3px 11px', borderRadius: 20, fontWeight: 600, background: 'rgba(244,114,182,0.14)', color: '#f9a8d4', border: '1px solid rgba(244,114,182,0.3)', cursor: 'pointer' },
+  likesOverlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)', zIndex: 400, display: 'flex', alignItems: 'center', justifyContent: 'center' },
+  likesPanel: { width: 'min(480px, 92vw)', maxHeight: '78vh', display: 'flex', flexDirection: 'column', background: 'rgba(16,16,22,0.96)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 18, boxShadow: '0 30px 80px rgba(0,0,0,0.6)', overflow: 'hidden' },
+  likesHead: { display: 'flex', alignItems: 'center', gap: 10, padding: '16px 18px', borderBottom: '1px solid rgba(255,255,255,0.07)' },
+  likesTitle: { display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 15, fontWeight: 700, color: '#f9fafb' },
+  likesPlayAll: { marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 5, padding: '6px 12px', borderRadius: 18, border: 'none', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer' },
+  likesClose: { width: 26, height: 26, borderRadius: 8, background: 'rgba(255,255,255,0.08)', border: 'none', color: '#cbd5e1', fontSize: 13, cursor: 'pointer' },
+  likesList: { overflowY: 'auto', padding: 8 },
+  likesEmpty: { padding: '48px 24px', textAlign: 'center', color: '#9ca3af', fontSize: 13, lineHeight: 1.8 },
+  likeRow: { display: 'flex', alignItems: 'center', gap: 12, padding: 8, borderRadius: 12, cursor: 'pointer', transition: 'background .15s' },
+  likeCover: { width: 46, height: 46, borderRadius: 8, objectFit: 'cover', flexShrink: 0 },
+  likeCoverPh: { display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(255,255,255,0.06)', fontSize: 20 },
+  likeMeta: { flex: 1, minWidth: 0 },
+  likeName: { fontSize: 14, fontWeight: 600, color: '#f3f4f6', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
+  likeArtist: { fontSize: 12, color: '#9ca3af', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', marginTop: 2 },
+  likeRemove: { width: 26, height: 26, borderRadius: '50%', background: 'transparent', border: 'none', color: '#6b7280', fontSize: 12, cursor: 'pointer', flexShrink: 0 },
 }

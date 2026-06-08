@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import Icon from './Icon'
 
 // 按当前时段 + 工作日/周末给出情境推荐
 function getContextSuggestion(d = new Date()) {
@@ -20,12 +21,12 @@ function getContextSuggestion(d = new Date()) {
 }
 
 const PRESET_MOODS = [
-  { label: '开心', emoji: '😄', text: '今天很开心，想听轻快的音乐', energy: 0.65, valence: 0.85 },
-  { label: '亢奋', emoji: '🔥', text: '精力充沛想蹦迪，越嗨越好', energy: 0.95, valence: 0.75 },
-  { label: '平静', emoji: '🌿', text: '想放松一下，安静地听听音乐', energy: 0.25, valence: 0.6 },
-  { label: '忧郁', emoji: '🌧️', text: '有点低落，想听一些安慰人的歌', energy: 0.3, valence: 0.2 },
-  { label: '专注', emoji: '🎯', text: '需要专注工作，要无歌词的背景音乐', energy: 0.45, valence: 0.55 },
-  { label: '浪漫', emoji: '💕', text: '想听些浪漫温柔的情歌', energy: 0.4, valence: 0.7 },
+  { label: '开心', icon: 'smile', color: '#fbbf24', filled: false, text: '今天很开心，想听轻快的音乐', energy: 0.65, valence: 0.85 },
+  { label: '亢奋', icon: 'flame', color: '#fb923c', filled: false, text: '精力充沛想蹦迪，越嗨越好', energy: 0.95, valence: 0.75 },
+  { label: '平静', icon: 'leaf', color: '#4ade80', filled: false, text: '想放松一下，安静地听听音乐', energy: 0.25, valence: 0.6 },
+  { label: '忧郁', icon: 'cloudRain', color: '#60a5fa', filled: false, text: '有点低落，想听一些安慰人的歌', energy: 0.3, valence: 0.2 },
+  { label: '专注', icon: 'target', color: '#22d3ee', filled: false, text: '需要专注工作，要无歌词的背景音乐', energy: 0.45, valence: 0.55 },
+  { label: '浪漫', icon: 'heart', color: '#f472b6', filled: true, text: '想听些浪漫温柔的情歌', energy: 0.4, valence: 0.7 },
 ]
 
 export default function MoodInput({ onStart, isLoading, isActive, moodConfig }) {
@@ -68,13 +69,13 @@ export default function MoodInput({ onStart, isLoading, isActive, moodConfig }) 
           style={{ ...styles.suggestBtn, background: accent, opacity: isLoading ? 0.5 : 1 }}
           onClick={() => !isLoading && onStart(sug.text, sug.energy, sug.valence)}
           disabled={isLoading}
-        >▶ 就这个</button>
+        ><Icon name="play" size={13} color="#fff" /> 就这个</button>
       </div>
 
       <div style={styles.presets} className="stagger">
         {PRESET_MOODS.map(p => (
           <button key={p.label} style={styles.preset} onClick={() => applyPreset(p)}>
-            <span>{p.emoji}</span>
+            <Icon name={p.icon} size={22} color={p.color} filled={p.filled} strokeWidth={2.2} />
             <span style={styles.presetLabel}>{p.label}</span>
           </button>
         ))}
@@ -112,7 +113,9 @@ export default function MoodInput({ onStart, isLoading, isActive, moodConfig }) 
         onClick={submit}
         disabled={isLoading || !text.trim()}
       >
-        {isLoading ? '🎵 AI 分析中…' : isActive ? '🔄 换个风格' : '🎙️ 开启电台'}
+        {isLoading
+          ? <>AI 分析中…</>
+          : <><Icon name={isActive ? 'refresh' : 'mic'} size={17} color="#fff" /> {isActive ? '换个风格' : '开启电台'}</>}
       </button>
     </div>
   )
@@ -152,7 +155,7 @@ const styles = {
   suggestBody: { flex: 1, minWidth: 0 },
   suggestLabel: { fontSize: 11, color: '#9ca3af', marginBottom: 2, letterSpacing: 0.5 },
   suggestText: { fontSize: 13, color: '#f3f4f6', fontWeight: 500, lineHeight: 1.3 },
-  suggestBtn: { flexShrink: 0, padding: '8px 12px', borderRadius: 10, border: 'none', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' },
+  suggestBtn: { flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 5, padding: '8px 13px', borderRadius: 10, border: 'none', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' },
   presets: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 },
   preset: {
     background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)',
@@ -177,5 +180,6 @@ const styles = {
     padding: '13px 0', borderRadius: 12, color: '#fff',
     fontSize: 15, fontWeight: 600, border: 'none', cursor: 'pointer',
     letterSpacing: 0.5, transition: 'opacity .2s',
+    display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8,
   },
 }

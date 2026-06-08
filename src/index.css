@@ -90,3 +90,7 @@ input:focus, textarea:focus {
 
 /* 卡片悬停微抬升 */
 .card-hover { transition: box-shadow .3s ease, transform .3s ease; }
+
+/* 喜欢列表行悬停 */
+.like-row:hover { background: rgba(255,255,255,0.07); }
+.like-row:hover .like-remove { color: #f87171 !important; }

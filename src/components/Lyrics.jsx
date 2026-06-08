@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import Icon from './Icon'
 
 const VIEW_H = 188
 
@@ -87,7 +88,7 @@ export default function Lyrics({ lines, audioRef, accent = '#31c27c', hasTrans }
                   textShadow: active ? `0 0 16px ${accent}` : 'none',
                   lineHeight: 1.25,
                 }}>
-                  {l.isChorus && <span style={{ opacity: 0.7, marginRight: 4 }}>✦</span>}
+                  {l.isChorus && <Icon name="star" size={10} color={accent} style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: 4, marginTop: -2 }} />}
                   {l.text || '♪'}
                 </div>
                 {showTrans && l.trans && (

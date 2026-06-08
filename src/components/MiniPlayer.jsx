@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import Icon from './Icon'
 
 export default function MiniPlayer({ track, isPlaying, audioRef, accent = '#31c27c', accent2 = '#1db954', lyric, analyser, onTogglePlay, onNext, onExit }) {
   const [progress, setProgress] = useState(0)
@@ -70,11 +71,11 @@ export default function MiniPlayer({ track, isPlaying, audioRef, accent = '#31c2
       </div>
 
       <div style={s.ctrls}>
-        <button style={s.btn} onClick={onTogglePlay} title={isPlaying ? '暂停' : '播放'}>{isPlaying ? '⏸' : '▶'}</button>
-        <button style={s.btn} onClick={onNext} title="下一首">⏭</button>
+        <button style={s.btn} onClick={onTogglePlay} title={isPlaying ? '暂停' : '播放'}><Icon name={isPlaying ? 'pause' : 'play'} size={15} color="#fff" /></button>
+        <button style={s.btn} onClick={onNext} title="下一首"><Icon name="next" size={15} color="#fff" /></button>
       </div>
 
-      <button style={s.exit} onClick={onExit} title="还原窗口">⤢</button>
+      <button style={s.exit} onClick={onExit} title="还原窗口"><Icon name="maximize" size={11} color="#cbd5e1" /></button>
     </div>
   )
 }
@@ -95,6 +96,6 @@ const s = {
   bars: { ...noDrag, display: 'flex', alignItems: 'flex-end', gap: 2, height: 22, width: 26, flexShrink: 0 },
   barEq: { width: 3, height: '15%', borderRadius: 2, transition: 'height .08s linear', alignSelf: 'flex-end' },
   ctrls: { ...noDrag, display: 'flex', gap: 6, flexShrink: 0 },
-  btn: { width: 34, height: 34, borderRadius: '50%', background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.18)', color: '#fff', fontSize: 14, cursor: 'pointer' },
-  exit: { ...noDrag, position: 'absolute', top: 6, right: 8, width: 20, height: 20, borderRadius: 5, background: 'rgba(255,255,255,0.1)', border: 'none', color: '#cbd5e1', fontSize: 11, cursor: 'pointer', lineHeight: 1 },
+  btn: { width: 34, height: 34, borderRadius: '50%', background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.18)', color: '#fff', fontSize: 14, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' },
+  exit: { ...noDrag, position: 'absolute', top: 6, right: 8, width: 20, height: 20, borderRadius: 5, background: 'rgba(255,255,255,0.1)', border: 'none', color: '#cbd5e1', fontSize: 11, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' },
 }

@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import Lyrics from './Lyrics'
+import Icon from './Icon'
 
 export default function NowPlaying({ track, isPlaying, loadingTrack, audioRef, onNext, queueCount, onTogglePlay, lyric, accent = '#31c27c', onVibe, onDislike, onSteer, onLike }) {
   const [progress, setProgress] = useState(0)
@@ -99,35 +100,36 @@ export default function NowPlaying({ track, isPlaying, loadingTrack, audioRef, o
 
       <div style={s.controls}>
         <button style={{ ...s.btn, ...s.btnMain, background: `linear-gradient(135deg, ${accent}, ${accent}cc)`, boxShadow: `0 6px 20px ${accent}66` }} onClick={onTogglePlay}>
-          {isPlaying ? '⏸' : '▶'}
+          <Icon name={isPlaying ? 'pause' : 'play'} size={24} color="#fff" />
         </button>
-        <button style={s.btn} onClick={onNext}>⏭</button>
+        <button style={s.btn} onClick={onNext}><Icon name="next" size={20} color="#fff" /></button>
         {choruses.length > 0 && (
           <button
             style={{ ...s.chorusBtn, borderColor: `${accent}66`, color: accent }}
             onClick={jumpChorus}
             title="跳到下一段副歌"
-          >✦ 副歌</button>
+          ><Icon name="star" size={13} color={accent} /> 副歌</button>
         )}
         <span style={s.badge}>队列 {queueCount}</span>
       </div>
 
       {track && onVibe && (
         <div style={s.vibeRow}>
-          <button style={{ ...s.vibeBtn, borderColor: '#f472b640', color: '#f9a8d4', background: 'rgba(244,114,182,0.08)' }} onClick={onLike} title="喜欢，收藏到 QQ我喜欢">❤️ 喜欢</button>
-          <button style={s.vibeBtn} onClick={onDislike} title="不喜欢这首，少推这类">👎 不喜欢</button>
+          <button style={{ ...s.vibeBtn, borderColor: '#f472b640', color: '#f9a8d4', background: 'rgba(244,114,182,0.08)' }} onClick={onLike} title="喜欢，收藏到 QQ我喜欢"><Icon name="heart" size={14} color="#f9a8d4" filled /> 喜欢</button>
+          <button style={s.vibeBtn} onClick={onDislike} title="不喜欢这首，少推这类"><Icon name="thumbsDown" size={14} color="#cbd5e1" /> 不喜欢</button>
           <span style={s.vibeDiv} />
-          <button style={s.vibeBtn} onClick={() => onVibe('up')} title="再嗨一点">🔥 再嗨点</button>
-          <button style={s.vibeBtn} onClick={() => onVibe('down')} title="冷静一些">🌙 冷静些</button>
-          <button style={s.vibeBtn} onClick={() => onVibe('flavor')} title="换个味道">🔀 换味道</button>
+          <button style={s.vibeBtn} onClick={() => onVibe('up')} title="再嗨一点"><Icon name="flame" size={14} color="#fb923c" /> 再嗨点</button>
+          <button style={s.vibeBtn} onClick={() => onVibe('down')} title="冷静一些"><Icon name="moon" size={14} color="#93c5fd" /> 冷静些</button>
+          <button style={s.vibeBtn} onClick={() => onVibe('flavor')} title="换个味道"><Icon name="shuffle" size={14} color="#cbd5e1" /> 换味道</button>
         </div>
       )}
 
       {track && onSteer && (
         <div style={s.steerRow}>
+          <span style={s.steerMic}><Icon name="mic" size={15} color="#9ca3af" /></span>
           <input
             style={s.steerInput}
-            placeholder="🎙️ 跟 DJ 说…「放点周杰伦但安静的」"
+            placeholder="跟 DJ 说…「放点周杰伦但安静的」"
             value={steerText}
             onChange={e => setSteerText(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter' && steerText.trim()) { onSteer(steerText.trim()); setSteerText('') } }}
@@ -141,11 +143,11 @@ export default function NowPlaying({ track, isPlaying, loadingTrack, audioRef, o
       )}
 
       <div style={s.volRow}>
-        <span style={{ fontSize: 13 }}>🔈</span>
+        <Icon name="volume" size={16} color="#9ca3af" />
         <input type="range" min={0} max={100} value={vol}
           onChange={e => changeVolume(Number(e.target.value))}
           className="mood-slider" style={{ flex: 1 }} />
-        <span style={{ fontSize: 13 }}>🔊</span>
+        <span style={s.volPct}>{vol}</span>
       </div>
 
       {track && <Lyrics lines={lines} hasTrans={lyric?.hasTrans} audioRef={audioRef} accent={accent} />}
@@ -174,9 +176,11 @@ const s = {
   badge: { fontSize: 12, color: '#6b7280', background: 'rgba(255,255,255,0.06)', padding: '4px 10px', borderRadius: 20 },
   volRow: { display: 'flex', alignItems: 'center', gap: 8, width: '100%' },
   vibeRow: { display: 'flex', gap: 6, width: '100%', justifyContent: 'center', alignItems: 'center', flexWrap: 'wrap' },
-  vibeBtn: { padding: '6px 11px', borderRadius: 16, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', color: '#e5e7eb', fontSize: 12, cursor: 'pointer', whiteSpace: 'nowrap' },
+  vibeBtn: { display: 'inline-flex', alignItems: 'center', gap: 5, padding: '6px 11px', borderRadius: 16, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', color: '#e5e7eb', fontSize: 12, cursor: 'pointer', whiteSpace: 'nowrap' },
   vibeDiv: { width: 1, height: 18, background: 'rgba(255,255,255,0.12)', margin: '0 2px' },
-  steerRow: { display: 'flex', gap: 6, width: '100%' },
-  steerInput: { flex: 1, minWidth: 0, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, padding: '8px 12px', color: '#f9fafb', fontSize: 13, outline: 'none' },
+  steerMic: { position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', display: 'flex' },
+  volPct: { fontSize: 11, color: '#6b7280', minWidth: 22, textAlign: 'right', fontVariantNumeric: 'tabular-nums' },
+  steerRow: { display: 'flex', gap: 6, width: '100%', position: 'relative' },
+  steerInput: { flex: 1, minWidth: 0, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, padding: '8px 12px 8px 34px', color: '#f9fafb', fontSize: 13, outline: 'none' },
   steerBtn: { flexShrink: 0, padding: '0 14px', borderRadius: 10, border: 'none', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer' },
 }
