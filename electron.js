@@ -2,6 +2,7 @@ const { app, BrowserWindow, ipcMain, net, protocol, screen, shell } = require('e
 const path = require('path')
 const fs = require('fs')
 const { autoUpdater } = require('electron-updater')
+const { qqSign } = require('./qqSign.cjs')
 
 // 主进程日志落盘，方便排查（dev 下 concurrently 会吞掉 stdout）
 const dlog = (...args) => {
@@ -304,8 +305,9 @@ ipcMain.handle('qq-add-favorite', async (_e, songId) => {
       comm: { ct: 24, cv: 0, uin, format: 'json' },
       req_1: { module: 'music.musicasset.PlaylistDetailWrite', method: 'AddSonglist', param: { dirId: 201, v_songInfo: [{ songId: Number(songId), songType: 0 }] } },
     })
-    const res = await net.fetch('https://u.y.qq.com/cgi-bin/musicu.fcg', {
-      method: 'POST', headers: { 'Content-Type': 'application/json', 'Referer': 'https://y.qq.com/', 'Cookie': cookieHeader }, body,
+    // 走签名版 musics.fcg：未签名的 musicu.fcg 对版权保护的歌(美人鱼等)会回 80105，签名后明文 body 即可成功
+    const res = await net.fetch(`https://u6.y.qq.com/cgi-bin/musics.fcg?_=${Date.now()}&sign=${qqSign(body)}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'Referer': 'https://y.qq.com/', 'Origin': 'https://y.qq.com', 'Cookie': cookieHeader }, body,
     })
     const ok = (await res.json()).req_1?.code === 0
     dlog('[fav-add]', songId, ok ? 'ok' : 'failed')

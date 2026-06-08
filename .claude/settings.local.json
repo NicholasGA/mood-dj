@@ -7,7 +7,12 @@
       "PowerShell($c = Get-Command node,npm,npx -ErrorAction SilentlyContinue | Select-Object Name,Source; $c | Format-Table -Auto | Out-String; \"PATH node dirs:\"; $env:Path -split ';' | Where-Object { $_ -match 'node' })",
       "Read(//c/Users/Reedolas/AppData/Roaming/spotify-mood-dj/**)",
       "Read(//c/Users/Reedolas/AppData/Roaming/**)",
-      "Bash(node -e ' *)"
+      "Bash(node -e ' *)",
+      "mcp__Claude_in_Chrome__browser_batch",
+      "mcp__Claude_in_Chrome__javascript_tool",
+      "mcp__Claude_in_Chrome__tabs_close_mcp",
+      "WebSearch",
+      "WebFetch(domain:jixun.uk)"
     ]
   }
 }
