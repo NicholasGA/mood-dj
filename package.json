@@ -1,12 +1,37 @@
 {
-  "name": "spotify-mood-dj",
+  "name": "mood-dj",
   "version": "1.0.0",
-  "description": "AI-powered mood-based Spotify DJ radio",
+  "description": "AI 心情电台桌面应用（QQ音乐 + Gemini）",
+  "author": "Mood DJ",
   "main": "electron.js",
   "scripts": {
     "dev": "concurrently \"vite\" \"wait-on http://localhost:5173 && cross-env ELECTRON_DEV=true electron .\"",
     "build": "vite build",
-    "start": "cross-env ELECTRON_DEV=true electron ."
+    "start": "cross-env ELECTRON_DEV=true electron .",
+    "dist": "vite build && electron-builder --win",
+    "dist:dir": "vite build && electron-builder --win --dir"
+  },
+  "build": {
+    "appId": "com.mooddj.app",
+    "productName": "Mood DJ",
+    "directories": { "output": "release" },
+    "files": ["electron.js", "preload.js", "dist/**/*"],
+    "win": {
+      "target": [
+        { "target": "nsis", "arch": ["x64"] },
+        { "target": "portable", "arch": ["x64"] }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "shortcutName": "Mood DJ",
+      "artifactName": "MoodDJ-Setup-${version}.${ext}"
+    },
+    "portable": {
+      "artifactName": "MoodDJ-Portable-${version}.${ext}"
+    }
   },
   "dependencies": {
     "react": "^18.3.0",
@@ -17,6 +42,7 @@
     "concurrently": "^9.0.0",
     "cross-env": "^7.0.3",
     "electron": "^32.3.3",
+    "electron-builder": "^26.15.2",
     "vite": "^5.4.0",
     "wait-on": "^8.0.0"
   }
