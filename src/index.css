@@ -43,6 +43,9 @@ html, body, #root {
 /* Disc spin animation */
 @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
+/* 切歌时封面氛围背景淡入 */
+@keyframes ambientIn { from { opacity: 0; } to { opacity: 0.9; } }
+
 /* Drag region for title bar */
 .drag-region { -webkit-app-region: drag; }
 .no-drag { -webkit-app-region: no-drag; }

@@ -6,6 +6,7 @@ import Visualizer from './components/Visualizer'
 import DJAnnouncement from './components/DJAnnouncement'
 import { searchTracks, getSongUrl } from './services/qqMusicApi'
 import { analyzeMood, generateAnnouncement, curateTracks } from './services/claudeDJ'
+import { extractAlbumColors } from './services/albumColor'
 
 export default function App() {
   const [qqCookies, setQQCookies] = useState(null)
@@ -17,6 +18,7 @@ export default function App() {
   const [showAnnouncement, setShowAnnouncement] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [loadingTrack, setLoadingTrack] = useState(false)
+  const [albumColors, setAlbumColors] = useState(null)
   const [error, setError] = useState('')
 
   const audioRef = useRef(new Audio())
@@ -25,6 +27,25 @@ export default function App() {
   const moodConfigRef = useRef(null)
   const qqCookiesRef = useRef(null)
   const isAdvancingRef = useRef(false)
+  const audioCtxRef = useRef(null)
+  const analyserRef = useRef(null)
+
+  // 懒初始化 Web Audio 分析器（只能对一个 <audio> 创建一次 source）
+  const ensureAnalyser = useCallback(() => {
+    if (analyserRef.current || !audioRef.current) return
+    try {
+      const Ctx = window.AudioContext || window.webkitAudioContext
+      const ctx = new Ctx()
+      const source = ctx.createMediaElementSource(audioRef.current)
+      const analyser = ctx.createAnalyser()
+      analyser.fftSize = 512
+      analyser.smoothingTimeConstant = 0.82
+      source.connect(analyser)
+      analyser.connect(ctx.destination)
+      audioCtxRef.current = ctx
+      analyserRef.current = analyser
+    } catch { /* 不支持则可视化退回时间驱动 */ }
+  }, [])
 
   useEffect(() => { queueRef.current = queue }, [queue])
   useEffect(() => { currentTrackRef.current = currentTrack }, [currentTrack])
@@ -35,6 +56,17 @@ export default function App() {
   useEffect(() => {
     window.electronAPI.getQQCookies().then(c => { if (c?.length) setQQCookies(c) })
   }, [])
+
+  // 当前歌曲变化时，从封面提取主题色（失败则回退心情色）
+  useEffect(() => {
+    const art = currentTrack?.album?.images?.[0]?.url
+    if (!art) { setAlbumColors(null); return }
+    let cancelled = false
+    extractAlbumColors(art)
+      .then(c => { if (!cancelled) setAlbumColors(c) })
+      .catch(() => { if (!cancelled) setAlbumColors(null) })
+    return () => { cancelled = true }
+  }, [currentTrack])
 
   // Set up audio element events
   useEffect(() => {
@@ -73,10 +105,12 @@ export default function App() {
   // 加载并播放单首；地址已在主进程校验过可播，拿不到地址会抛错
   const playTrack = useCallback(async (track) => {
     const url = await getSongUrl(qqCookiesRef.current, track.mid, track.media_mid)
+    ensureAnalyser()
+    audioCtxRef.current?.resume?.()  // 自动播放策略下需在用户手势后恢复
     audioRef.current.src = url
     audioRef.current.load()
     await audioRef.current.play()
-  }, [])
+  }, [ensureAnalyser])
 
   // 从队列依次试播，自动跳过需 VIP / 无版权的歌，直到放出一首或试完
   const playNext = useCallback(async () => {
@@ -125,6 +159,7 @@ export default function App() {
           mood_emoji: '🎵', dj_intro: '音乐开始，感受当下~',
         }
       }
+      config.energy = energy  // 供 Visualizer 用（analyzeMood 不回传 energy）
       setMoodConfig(config)
       setAnnouncement(config.dj_intro)
       setShowAnnouncement(true)
@@ -172,11 +207,16 @@ export default function App() {
     return <AuthScreen onQQAuth={setQQCookies} />
   }
 
-  const accent = moodConfig?.color_primary || '#31c27c'
-  const accent2 = moodConfig?.color_secondary || '#1db954'
+  // 优先用当前封面主题色（每首歌不同），无则回退心情色
+  const accent = albumColors?.primary || moodConfig?.color_primary || '#31c27c'
+  const accent2 = albumColors?.secondary || moodConfig?.color_secondary || '#1db954'
+  const vizMood = moodConfig ? { ...moodConfig, color_primary: accent, color_secondary: accent2 } : null
+  const ambientArt = currentTrack?.album?.images?.[0]?.url
 
   return (
     <div style={{ '--accent': accent, '--accent2': accent2, ...styles.root }}>
+      {ambientArt && <img src={ambientArt} alt="" aria-hidden style={styles.ambient} key={ambientArt} />}
+      {ambientArt && <div style={styles.ambientVeil} aria-hidden />}
       <div style={styles.titleBar}>
         <span style={styles.appName}>Mood DJ {moodConfig?.mood_emoji || '🎵'}</span>
         {moodConfig && <span style={{ ...styles.tag, background: `${accent}33`, color: accent }}>{moodConfig.mood_name}</span>}
@@ -188,7 +228,7 @@ export default function App() {
         </div>
       </div>
 
-      <Visualizer moodConfig={moodConfig} isPlaying={isPlaying} />
+      <Visualizer moodConfig={vizMood} isPlaying={isPlaying} analyser={analyserRef} track={currentTrack} />
 
       {error && <div style={styles.errBanner} onClick={() => setError('')}>⚠️ {error} <span style={{ opacity: .5, fontSize: 11 }}>点击关闭</span></div>}
 
@@ -212,6 +252,8 @@ export default function App() {
 
 const styles = {
   root: { height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', fontFamily: 'system-ui,sans-serif', color: '#f9fafb', background: '#0a0a0a' },
+  ambient: { position: 'fixed', inset: '-10%', width: '120%', height: '120%', objectFit: 'cover', filter: 'blur(46px) saturate(1.8) brightness(0.95)', opacity: 0.9, zIndex: 0, pointerEvents: 'none', transform: 'scale(1.1)', animation: 'ambientIn 1.1s ease' },
+  ambientVeil: { position: 'fixed', inset: 0, zIndex: 0, pointerEvents: 'none', background: 'radial-gradient(ellipse at 50% 42%, rgba(10,10,10,0.04) 0%, rgba(10,10,10,0.42) 58%, rgba(10,10,10,0.82) 100%)' },
   titleBar: { height: 40, display: 'flex', alignItems: 'center', padding: '0 16px', gap: 12, flexShrink: 0, background: 'rgba(10,10,10,0.85)', backdropFilter: 'blur(12px)', borderBottom: '1px solid rgba(255,255,255,0.06)', zIndex: 50, WebkitAppRegion: 'drag', userSelect: 'none' },
   appName: { fontSize: 14, fontWeight: 700 },
   tag: { fontSize: 11, padding: '2px 10px', borderRadius: 20, fontWeight: 500 },
