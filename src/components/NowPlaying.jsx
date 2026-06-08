@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import Lyrics from './Lyrics'
 
-export default function NowPlaying({ track, isPlaying, loadingTrack, audioRef, onNext, queueCount, onTogglePlay, lyric, accent = '#31c27c', onVibe, onDislike, onSteer }) {
+export default function NowPlaying({ track, isPlaying, loadingTrack, audioRef, onNext, queueCount, onTogglePlay, lyric, accent = '#31c27c', onVibe, onDislike, onSteer, onLike }) {
   const [progress, setProgress] = useState(0)
   const [dur, setDur] = useState(0)
   const [vol, setVol] = useState(80)
@@ -114,6 +114,7 @@ export default function NowPlaying({ track, isPlaying, loadingTrack, audioRef, o
 
       {track && onVibe && (
         <div style={s.vibeRow}>
+          <button style={{ ...s.vibeBtn, borderColor: '#f472b633', color: '#f9a8d4' }} onClick={onLike} title="喜欢，收藏到 QQ我喜欢">❤️ 喜欢</button>
           <button style={s.vibeBtn} onClick={() => onVibe('up')} title="再嗨一点">🔥 再嗨点</button>
           <button style={s.vibeBtn} onClick={() => onVibe('down')} title="冷静一些">🌙 冷静些</button>
           <button style={s.vibeBtn} onClick={() => onVibe('flavor')} title="换个味道">🔀 换味道</button>

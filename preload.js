@@ -9,6 +9,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getQQUrl:            (songmid, mediaMid) => ipcRenderer.invoke('qq-get-url', songmid, mediaMid),
   getQQLyric:          (songmid) => ipcRenderer.invoke('qq-get-lyric', songmid),
   getQQFavorites:      () => ipcRenderer.invoke('qq-get-favorites'),
+  addQQFavorite:       (songId) => ipcRenderer.invoke('qq-add-favorite', songId),
+  getMemory:           () => ipcRenderer.invoke('get-memory'),
+  storeMemory:         (v) => ipcRenderer.invoke('store-memory', v),
   // Window
   minimize: () => ipcRenderer.send('win-minimize'),
   maximize: () => ipcRenderer.send('win-maximize'),

@@ -251,9 +251,31 @@ ipcMain.handle('qq-get-favorites', async () => {
   } catch (e) { dlog('[fav] error', e.message); return null }
 })
 
+// ── 把一首歌加入 QQ "我喜欢"(dirId 201) ───────────────────────────
+ipcMain.handle('qq-add-favorite', async (_e, songId) => {
+  try {
+    const session = mainWindow.webContents.session
+    const allCookies = await session.cookies.get({})
+    const uin = resolveUin(allCookies)
+    if (uin === '0' || !songId) return false
+    const cookieHeader = allCookies.filter(c => c.domain?.includes('qq.com')).map(c => `${c.name}=${c.value}`).join('; ')
+    const body = JSON.stringify({
+      comm: { ct: 24, cv: 0, uin, format: 'json' },
+      req_1: { module: 'music.musicasset.PlaylistDetailWrite', method: 'AddSonglist', param: { dirId: 201, v_songInfo: [{ songId: Number(songId), songType: 0 }] } },
+    })
+    const res = await net.fetch('https://u.y.qq.com/cgi-bin/musicu.fcg', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'Referer': 'https://y.qq.com/', 'Cookie': cookieHeader }, body,
+    })
+    const ok = (await res.json()).req_1?.code === 0
+    dlog('[fav-add]', songId, ok ? 'ok' : 'failed')
+    return ok
+  } catch (e) { dlog('[fav-add] error', e.message); return false }
+})
+
 // ── Token / cookie persistence ─────────────────────────────────────
 const dataDir  = () => app.getPath('userData')
 const qqFile    = () => path.join(dataDir(), 'mooddj-qq.json')
+const memFile   = () => path.join(dataDir(), 'mooddj-memory.json')
 
 const readJson = (f) => { try { return fs.existsSync(f) ? JSON.parse(fs.readFileSync(f, 'utf8')) : null } catch { return null } }
 const writeJson = (f, v) => fs.writeFileSync(f, JSON.stringify(v))
@@ -261,6 +283,8 @@ const writeJson = (f, v) => fs.writeFileSync(f, JSON.stringify(v))
 ipcMain.handle('get-qq-cookies',  () => readJson(qqFile()))
 ipcMain.handle('store-qq-cookies',(_e, v) => writeJson(qqFile(), v))
 ipcMain.handle('clear-qq-cookies',() => { try { fs.unlinkSync(qqFile()) } catch {} })
+ipcMain.handle('get-memory',      () => readJson(memFile()))
+ipcMain.handle('store-memory',    (_e, v) => writeJson(memFile(), v))
 
 // ── Window controls ───────────────────────────────────────────────
 ipcMain.on('win-minimize', () => mainWindow.minimize())

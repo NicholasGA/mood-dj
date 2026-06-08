@@ -43,6 +43,8 @@ export default function App() {
   const radioRef = useRef(null)        // 当前电台上下文：{ queries, playlistIds, seen }，用于无限补歌
   const replenishPromiseRef = useRef(null)   // 进行中的补歌 promise（合并并发调用，避免竞态）
   const favRef = useRef(null)          // 用户收藏：{ playlistIds, topArtists, sample, favCount }
+  const memoryRef = useRef({ likedTracks: [], dislikedArtists: [] })   // 跨会话口味记忆
+  const saveMemory = useCallback(() => { window.electronAPI.storeMemory(memoryRef.current) }, [])
 
   // 懒初始化 Web Audio 分析器（只能对一个 <audio> 创建一次 source）
   const ensureAnalyser = useCallback(() => {
@@ -69,6 +71,13 @@ export default function App() {
   // Load stored QQ cookies on startup
   useEffect(() => {
     window.electronAPI.getQQCookies().then(c => { if (c?.length) setQQCookies(c) })
+  }, [])
+
+  // 载入跨会话口味记忆（喜欢的歌 + 不喜欢的歌手）
+  useEffect(() => {
+    window.electronAPI.getMemory().then(m => {
+      if (m) memoryRef.current = { likedTracks: m.likedTracks || [], dislikedArtists: m.dislikedArtists || [] }
+    }).catch(() => {})
   }, [])
 
   // 登录后拉取用户收藏（"我喜欢"等），用于个性化推荐
@@ -306,18 +315,23 @@ export default function App() {
       setShowAnnouncement(true)
       setTimeout(() => setShowAnnouncement(false), 6000)
 
-      // 个性化：把常听歌手并入搜索词，让选歌带上你的口味
+      // 个性化：常听歌手(收藏) + 喜欢过的歌手(记忆) 并入口味信号
       const fav = favRef.current
-      const favArtists = fav?.topArtists || []
-      const artistQueries = favArtists.slice(0, 6).sort(() => Math.random() - 0.5).slice(0, 2)
+      const taste = [...new Set([...(fav?.topArtists || []), ...likedArtists()])]
+      const artistQueries = taste.slice(0, 8).sort(() => Math.random() - 0.5).slice(0, 2)
       const queries = [...(config.search_queries || []), ...artistQueries]
 
+      // 跨会话记忆：开台就把"不喜欢的歌手"带上，全程过滤
+      const dislikedSet = new Set(memoryRef.current.dislikedArtists)
+      const blocked = (t) => (t.artists || []).some(a => dislikedSet.has(a.name))
+
       const allTracks = [], seen = new Set()
-      const add = (arr) => { for (const t of arr || []) if (t?.mid && !seen.has(t.mid)) { seen.add(t.mid); allTracks.push(t) } }
+      const add = (arr) => { for (const t of arr || []) if (t?.mid && !seen.has(t.mid) && !blocked(t)) { seen.add(t.mid); allTracks.push(t) } }
       const ok = (results) => results.forEach(r => r.status === 'fulfilled' && add(r.value))
 
-      // 0) 收藏样本直接进池（AI 精排会按心情筛）
+      // 0) 收藏样本 + 喜欢过的歌直接进池（AI 精排会按心情筛）
       if (fav?.sample?.length) add(fav.sample)
+      if (memoryRef.current.likedTracks.length) add(memoryRef.current.likedTracks.slice(-30))
 
       // 1) 单曲搜索（并发，随机翻页，每次都不一样）
       ok(await Promise.allSettled(queries.map(q => searchTracks(qqCookies, q, 15, 1 + Math.floor(Math.random() * 4)))))
@@ -332,12 +346,12 @@ export default function App() {
 
       if (allTracks.length === 0) throw new Error('未找到匹配曲目，请换个描述')
 
-      // 存电台上下文，供无限补歌 + 实时调味复用
-      radioRef.current = { queries, playlistIds, seen, energy, valence, disliked: new Set() }
+      // 存电台上下文，供无限补歌 + 实时调味复用（disliked 用记忆里的歌手种子）
+      radioRef.current = { queries, playlistIds, seen, energy, valence, disliked: dislikedSet }
 
       // AI 精排：按心情 + 你的口味挑选排序；失败则回退随机洗牌
       try {
-        shuffled = await curateTracks(allTracks, config, energy, valence, favArtists)
+        shuffled = await curateTracks(allTracks, config, energy, valence, taste)
       } catch {
         shuffled = allTracks.sort(() => Math.random() - 0.5)
       }
@@ -404,10 +418,34 @@ export default function App() {
     if (!ctx || !cur) return
     ctx.disliked = ctx.disliked || new Set()
     ;(cur.artists || []).forEach(a => ctx.disliked.add(a.name))
+    // 跨会话记住"不喜欢这些歌手"
+    const mem = memoryRef.current
+    ;(cur.artists || []).forEach(a => { if (a.name && !mem.dislikedArtists.includes(a.name)) mem.dislikedArtists.push(a.name) })
+    saveMemory()
     const filtered = queueRef.current.filter(t => !(t.artists || []).some(a => ctx.disliked.has(a.name)))
     queueRef.current = filtered; setQueue(filtered)
     showToast('👎 已跳过，少推这类')
     playNext()
+  }
+
+  // ❤️ 喜欢：记到本地口味记忆 + 加进 QQ"我喜欢"
+  function likeCurrent() {
+    const cur = currentTrackRef.current
+    if (!cur) return
+    const mem = memoryRef.current
+    if (!mem.likedTracks.some(t => t.mid === cur.mid)) {
+      mem.likedTracks.push({ id: cur.id, mid: cur.mid, media_mid: cur.media_mid, name: cur.name, artists: cur.artists, album: cur.album })
+      saveMemory()
+    }
+    showToast('❤️ 已收藏')
+    if (cur.id) window.electronAPI.addQQFavorite(Number(cur.id)).then(ok => { if (!ok) showToast('❤️ 已记住（QQ 同步失败）') })
+  }
+
+  // 从喜欢的歌里统计常听歌手，作为口味信号
+  const likedArtists = () => {
+    const c = {}
+    memoryRef.current.likedTracks.forEach(t => (t.artists || []).forEach(a => { c[a.name] = (c[a.name] || 0) + 1 }))
+    return Object.entries(c).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([n]) => n)
   }
 
   // 对话点歌：解析意图（歌手/关键词）→ 歌手按本人搜、关键词按曲风搜 → 新点的排队首，保留当前曲
@@ -524,6 +562,7 @@ export default function App() {
           onVibe={adjustVibe}
           onDislike={dislikeCurrent}
           onSteer={steerRadio}
+          onLike={likeCurrent}
         />
       </div>
 
