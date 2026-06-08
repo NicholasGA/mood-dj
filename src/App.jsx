@@ -10,6 +10,7 @@ import Icon from './components/Icon'
 import { searchTracks, getSongUrl, getLyric, searchPlaylists, getPlaylistTracks, searchByArtist } from './services/qqMusicApi'
 import { analyzeMood, generateStory, curateTracks, interpretRequest, configureLLM, hasLLMKey, analyzeTaste, clusterLikes } from './services/claudeDJ'
 import { localStory, localMoodConfig } from './services/djText'
+import { freshen, pushRecent } from './services/radio'
 import { extractAlbumColors } from './services/albumColor'
 
 export default function App() {
@@ -226,9 +227,9 @@ export default function App() {
       const fresh = []
       const disliked = (t) => ctx.disliked && (t.artists || []).some(a => ctx.disliked.has(a.name))
       const add = (arr) => { for (const t of arr || []) if (t?.mid && !ctx.seen.has(t.mid) && !disliked(t)) { ctx.seen.add(t.mid); fresh.push(t) } }
-      // 1) 单曲搜索：随机翻页（页码范围更大，避开热门）
+      // 1) 单曲搜索：随机翻较深页（避开第 1 页口水热门）
       await Promise.allSettled(ctx.queries.map(q =>
-        searchTracks(qqCookiesRef.current, q, 15, 1 + Math.floor(Math.random() * 8)).then(add).catch(() => {})))
+        searchTracks(qqCookiesRef.current, q, 15, 2 + Math.floor(Math.random() * 8)).then(add).catch(() => {})))
       // 2) 已知歌单随机翻段
       if (ctx.playlistIds.length) {
         const pid = ctx.playlistIds[Math.floor(Math.random() * ctx.playlistIds.length)]
@@ -244,8 +245,9 @@ export default function App() {
         } catch {}
       }
       if (fresh.length) {
-        fresh.sort(() => Math.random() - 0.5)
-        const merged = [...queueRef.current, ...fresh]
+        const picked = freshen(fresh, new Set(memoryRef.current.recentMids || []), { maxPer: 2, min: 1 })
+        picked.sort(() => Math.random() - 0.5)
+        const merged = [...queueRef.current, ...picked]
         queueRef.current = merged
         setQueue(merged)
       }
@@ -284,6 +286,7 @@ export default function App() {
           queueRef.current = q
           setQueue(q)
           setError('')
+          memoryRef.current.recentMids = pushRecent(memoryRef.current.recentMids || [], next.mid)  // 记最近放过
           if (q.length < 6) replenishQueue()          // 偏低就后台补歌（不阻塞）
           return
         } catch { /* 这首放不了，试下一首 */ }
@@ -378,8 +381,8 @@ export default function App() {
       if (fav?.sample?.length) add(fav.sample)
       if (memoryRef.current.likedTracks.length) add(memoryRef.current.likedTracks.slice(-30))
 
-      // 1) 单曲搜索（并发，随机翻页，每次都不一样）
-      ok(await Promise.allSettled(queries.map(q => searchTracks(qqCookies, q, 15, 1 + Math.floor(Math.random() * 4)))))
+      // 1) 单曲搜索（并发，翻较深页：避开第 1 页口水热门，更新鲜）
+      ok(await Promise.allSettled(queries.map(q => searchTracks(qqCookies, q, 15, 2 + Math.floor(Math.random() * 6)))))
 
       // 2) 歌单源（并发）：搜人工歌单 → 挑歌量充足的几个 → 捞歌进池
       const plLists = await Promise.allSettled((config.search_queries || []).slice(0, 2).map(q => searchPlaylists(qqCookies, q, 6)))
@@ -400,8 +403,11 @@ export default function App() {
       } catch {
         shuffled = allTracks.sort(() => Math.random() - 0.5)
       }
+      // 新鲜度/多样性：去最近放过的 + 限每位歌手数量（过滤到太短会自动退回，不清空）
+      shuffled = freshen(shuffled, new Set(memoryRef.current.recentMids || []), { maxPer: 3, min: 8 })
       setQueue(shuffled)
       queueRef.current = shuffled   // 让 playNext 立即读到最新队列（state 更新是异步的）
+      saveMemory()                  // 持久化"最近放过"（跨会话防重复）
     } catch (e) {
       setError(e.message)
     } finally {
@@ -423,9 +429,9 @@ export default function App() {
 
   // 播放中实时调味：把新 vibe 的歌插到队首，立即生效（不重开台、不耗 Gemini）
   const VIBE = {
-    up:     { key: '燃 快节奏 嗨曲', dE: 0.2, toast: '🔥 更带劲了' },
-    down:   { key: '安静 慢歌 治愈', dE: -0.2, toast: '🌙 冷静下来' },
-    flavor: { key: '', dE: 0, toast: '🔀 换个味道' },
+    up:     { key: '燃 快节奏 嗨曲 高能', dE: 0.22, pl: '运动 健身 燃歌', toast: '🔥 更带劲了' },
+    down:   { key: '安静 慢歌 抒情 治愈', dE: -0.22, pl: '深夜 安静 助眠', toast: '🌙 冷静下来' },
+    flavor: { key: '', dE: 0, pl: '', toast: '🔀 换个味道' },
   }
   async function adjustVibe(mode) {
     const ctx = radioRef.current
@@ -440,21 +446,27 @@ export default function App() {
       const fresh = []
       const disliked = (t) => ctx.disliked && (t.artists || []).some(a => ctx.disliked.has(a.name))
       const add = (arr) => { for (const t of arr || []) if (t?.mid && !ctx.seen.has(t.mid) && !disliked(t)) { ctx.seen.add(t.mid); fresh.push(t) } }
-      await Promise.allSettled((ctx.queries || []).map(q =>
-        searchTracks(qqCookiesRef.current, v.key ? `${q} ${v.key}` : q, 15, 1 + Math.floor(Math.random() * 5)).then(add).catch(() => {})))
-      if (mode === 'flavor') {
+      // 基于当前电台关键词叠加能量描述，翻较深页（新鲜、少口水）
+      await Promise.allSettled((ctx.queries || []).slice(0, 4).map(q =>
+        searchTracks(qqCookiesRef.current, v.key ? `${q} ${v.key}` : q, 15, 2 + Math.floor(Math.random() * 6)).then(add).catch(() => {})))
+      // 嗨/静：再补一个能量专属歌单，落差更明显
+      if (v.pl) {
         try {
-          const pls = await searchPlaylists(qqCookiesRef.current, (ctx.queries || ['流行'])[Math.floor(Math.random() * ctx.queries.length)], 10)
+          const pls = await searchPlaylists(qqCookiesRef.current, v.pl, 8)
           const np = pls.find(p => !ctx.playlistIds.includes(p.id))
           if (np) { ctx.playlistIds.push(np.id); await getPlaylistTracks(qqCookiesRef.current, np.id, 50).then(add).catch(() => {}) }
         } catch {}
       }
-      if (fresh.length) {
-        fresh.sort(() => Math.random() - 0.5)
-        const merged = [...fresh, ...queueRef.current]   // 新味道排队首，下一首即生效
-        queueRef.current = merged; setQueue(merged)
-        showToast(v.toast)
-      } else showToast('没找到更多，再试一次')
+      let picked = freshen(fresh, new Set(memoryRef.current.recentMids || []), { maxPer: 2, min: 5 })
+      picked.sort(() => Math.random() - 0.5)
+      if (!picked.length) { showToast('没找到更多，再试一次'); return }
+      if (mode === 'flavor') {
+        queueRef.current = [...picked, ...queueRef.current]   // 换味道：同心情换一批新歌排队首，不跑偏
+      } else {
+        queueRef.current = picked                            // 嗨/静：替换接下来的队列，下一首起明显变味
+      }
+      setQueue(queueRef.current)
+      showToast(v.toast)
     } finally { setLoadingTrack(false) }
   }
 
