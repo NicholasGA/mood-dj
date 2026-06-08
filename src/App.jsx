@@ -117,17 +117,24 @@ export default function App() {
     refreshFavCount()
   }, [qqCookies, refreshFavCount])
 
-  // AI 音乐画像：无感呈现在主界面。优先用 QQ「我喜欢」样本（更代表你），否则用 app 喜欢；
-  // 持久化 + 按需生成，几乎零额外配额（命中持久化就不调）
+  // AI 音乐画像：无感呈现在主界面。优先 QQ「我喜欢」样本（更代表你），否则 app 喜欢。
+  // 命中持久化就不调；AI 不可用(配额/网络)时用本地"常听歌手"兜底，保证这行一定有。
   useEffect(() => {
-    if (tasteProfile) return
+    if (tasteProfile || !qqCookies) return
     if (memoryRef.current.homeProfile) { setTasteProfile(memoryRef.current.homeProfile); return }
     const sample = favRef.current?.sample || []
     const pool = sample.length >= 8 ? sample : memoryRef.current.likedTracks
-    if (!pool || pool.length < 5) return
-    analyzeTaste(pool).then(p => {
-      if (p?.personality) { memoryRef.current.homeProfile = p; saveMemory(); setTasteProfile(p) }
-    }).catch(() => {})
+    if (!pool || pool.length < 3) return
+    const local = () => {
+      const arts = favRef.current?.topArtists?.length ? favRef.current.topArtists : likedArtists()
+      return arts.length ? { personality: `常听 ${arts.slice(0, 3).join('、')}，品味挺有一套`, genres: [], moods: [], artists: arts.slice(0, 4), explore: '' } : null
+    }
+    analyzeTaste(pool)
+      .then(p => {
+        if (p?.personality) { memoryRef.current.homeProfile = p; saveMemory(); setTasteProfile(p) }  // 真画像才持久化
+        else { const l = local(); if (l) setTasteProfile(l) }
+      })
+      .catch(() => { const l = local(); if (l) setTasteProfile(l) })   // 兜底不持久化，下次有配额再生成真画像
   }, [favCount, qqCookies, tasteProfile])
 
   // 当前歌曲变化时，从封面提取主题色（失败则回退心情色）
