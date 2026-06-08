@@ -8,7 +8,7 @@ import MiniPlayer from './components/MiniPlayer'
 import LikesPanel from './components/LikesPanel'
 import Icon from './components/Icon'
 import { searchTracks, getSongUrl, getLyric, searchPlaylists, getPlaylistTracks, searchByArtist } from './services/qqMusicApi'
-import { analyzeMood, generateAnnouncement, curateTracks, interpretRequest, configureLLM, hasLLMKey } from './services/claudeDJ'
+import { analyzeMood, generateStory, curateTracks, interpretRequest, configureLLM, hasLLMKey, analyzeTaste, clusterLikes } from './services/claudeDJ'
 import { extractAlbumColors } from './services/albumColor'
 
 export default function App() {
@@ -52,6 +52,8 @@ export default function App() {
   const favRef = useRef(null)          // 用户收藏：{ playlistIds, topArtists, sample, favCount }
   const memoryRef = useRef({ likedTracks: [], dislikedArtists: [] })   // 跨会话口味记忆
   const saveMemory = useCallback(() => { window.electronAPI.storeMemory(memoryRef.current) }, [])
+  const lastSpokeRef = useRef(0)         // 上次语音播报时间（节流，文字每首都显示）
+  const [djSpeak, setDjSpeak] = useState(false)   // 本次播报是否出声
 
   // 懒初始化 Web Audio 分析器（只能对一个 <audio> 创建一次 source）
   const ensureAnalyser = useCallback(() => {
@@ -83,7 +85,7 @@ export default function App() {
   // 载入跨会话口味记忆（喜欢的歌 + 不喜欢的歌手）
   useEffect(() => {
     window.electronAPI.getMemory().then(m => {
-      if (m) memoryRef.current = { likedTracks: m.likedTracks || [], dislikedArtists: m.dislikedArtists || [] }
+      if (m) memoryRef.current = { ...memoryRef.current, ...m, likedTracks: m.likedTracks || [], dislikedArtists: m.dislikedArtists || [] }   // 保留 likesCache / songStories 等持久化缓存
       setLikedCount(memoryRef.current.likedTracks.length)
     }).catch(() => {})
   }, [])
@@ -165,16 +167,57 @@ export default function App() {
     }
   }, [])
 
-  const showDJ = useCallback(async (next) => {
-    try {
-      // TTS 由 DJAnnouncement 统一负责；这里只产出文案与显隐
-      const text = await generateAnnouncement(currentTrackRef.current, next, moodConfigRef.current?.mood_name || '未知')
-      if (!text) return // 冷却期返回空串时不弹空气泡
-      setAnnouncement(text)
-      setShowAnnouncement(true)
-      setTimeout(() => setShowAnnouncement(false), 6000)
-    } catch { /* non-critical */ }
+  // 本地兜底简介（零 API）：AI 没好/配额用尽时也保证每首都有一句，按 mid 选句保持稳定
+  const localStory = (t) => {
+    const name = t?.name || '这首'
+    const artist = t?.artists?.map(a => a.name).join('、') || ''
+    const tmpl = artist
+      ? [`${artist} 的「${name}」，跟着走就对了`, `接下来「${name}」— ${artist}，听听这个味道`,
+         `${artist} 带来「${name}」，让它陪你这一刻`, `「${name}」，${artist}，闭眼感受一下`]
+      : [`「${name}」，让它陪你这一刻`, `接下来「${name}」，跟着感觉走`]
+    let h = 0; const s = t?.mid || name
+    for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0
+    return tmpl[h % tmpl.length]
+  }
+
+  const showDJ = useCallback((next) => {
+    // 立刻显示：有缓存的歌词故事就用，否则本地兜底——保证每首都有一句（AI 故事由下面副作用异步补上）
+    const line = memoryRef.current.songStories?.[next.mid] || localStory(next)
+    const speak = Date.now() - lastSpokeRef.current > 45000   // 语音节流：≥45s 才出声
+    if (speak) lastSpokeRef.current = Date.now()
+    setDjSpeak(speak)
+    setAnnouncement(line)
+    setShowAnnouncement(true)
+    setTimeout(() => setShowAnnouncement(false), 8000)
   }, [])
+
+  // 基于歌词的「这首歌的故事」：歌真正听了约 4s 才生成（跳过的不浪费配额），按 mid 永久缓存复用
+  useEffect(() => {
+    const t = currentTrack, mid = t?.mid
+    if (!mid || memoryRef.current.songStories?.[mid]) return   // 无歌 / 已有缓存
+    let cancelled = false
+    const timer = setTimeout(async () => {
+      try {
+        const ly = await getLyric(mid).catch(() => null)
+        if (cancelled) return
+        const lines = ly?.lines || []
+        const chorus = lines.filter(l => l.isChorus).map(l => (l.text || '').trim()).filter(Boolean)
+        const plain = lines.map(l => (l.text || '').trim()).filter(Boolean)
+        const snippet = [...new Set((chorus.length ? chorus : plain).slice(0, 8))].join('\n').slice(0, 240)
+        const story = await generateStory(t, snippet, { likedArtists: likedArtists() })
+        if (cancelled || !story) return
+        const cache = memoryRef.current.songStories || (memoryRef.current.songStories = {})
+        cache[mid] = story
+        const keys = Object.keys(cache); if (keys.length > 300) keys.slice(0, keys.length - 300).forEach(k => delete cache[k])
+        saveMemory()
+        if (currentTrackRef.current?.mid === mid) {   // 仍在放这首 → 升级成歌词故事（不重复出声）
+          setDjSpeak(false); setAnnouncement(story); setShowAnnouncement(true)
+          setTimeout(() => setShowAnnouncement(false), 8000)
+        }
+      } catch { /* 配额/失败：保留本地兜底，下次再试 */ }
+    }, 4000)
+    return () => { cancelled = true; clearTimeout(timer) }
+  }, [currentTrack])
 
   // 加载并播放单首；地址已在主进程校验过可播，拿不到地址会抛错
   const playTrack = useCallback(async (track) => {
@@ -492,36 +535,33 @@ export default function App() {
     setLikedCount(mem.likedTracks.length)
   }
 
-  // 喜欢电台（发现版）：爱的歌 × AI 发现的同好新歌，交错播放、无限续 —— QQ 收藏夹做不到
-  async function startLikesRadio() {
-    const likes = memoryRef.current.likedTracks
-    if (likes.length < 2) { showToast('先多 ❤️ 几首，喜欢电台才好玩'); return }
-    setShowLikes(false); setLoadingTrack(true)
-    try {
-      const arts = likedArtists()
-      const seen = new Set(likes.map(t => t.mid))
-      const disliked = new Set(memoryRef.current.dislikedArtists)
-      const discovered = []
-      const add = (arr) => { for (const t of arr || []) if (t?.mid && !seen.has(t.mid) && !(t.artists || []).some(a => disliked.has(a.name))) { seen.add(t.mid); discovered.push(t) } }
-      ;(await Promise.allSettled(arts.slice(0, 5).map(a => searchByArtist(qqCookiesRef.current, a, 20, 1 + Math.floor(Math.random() * 3))))).forEach(r => r.status === 'fulfilled' && add(r.value))
-      // 交错：你爱的(新→旧) 与 发现的(乱序)
-      const loved = likes.slice().reverse(), disc = discovered.sort(() => Math.random() - 0.5)
-      const ordered = []
-      for (let i = 0; i < Math.max(loved.length, disc.length); i++) { if (i < loved.length) ordered.push(loved[i]); if (i < disc.length) ordered.push(disc[i]) }
-      radioRef.current = { queries: arts.slice(0, 5), playlistIds: [], seen, energy: 0.5, valence: 0.6, disliked }
-      const cfg = { mood_name: '喜欢电台', search_queries: arts, color_primary: '#f472b6', color_secondary: '#a855f7', mood_emoji: '❤️', dj_intro: '专属你的喜欢电台，边听边挖新宝藏~', energy: 0.5 }
-      setMoodConfig(cfg); setAnnouncement(cfg.dj_intro); setShowAnnouncement(true); setTimeout(() => setShowAnnouncement(false), 6000)
-      queueRef.current = ordered; setQueue(ordered)
-      playNext()
-    } finally { setLoadingTrack(false) }
-  }
-
   // 播放一个自动分组
   function playGroup(tracks) {
     if (!tracks?.length) return
     queueRef.current = tracks.slice(); setQueue(tracks.slice())
     setShowLikes(false)
     playNext()
+  }
+
+  // 喜欢集合的指纹：数量 + 最后一首 mid。口味没变就复用缓存，不再花 AI 配额
+  function likesSig() {
+    const l = memoryRef.current.likedTracks
+    return l.length ? `${l.length}:${l[l.length - 1].mid}` : '0'
+  }
+  // 画像/分组都按指纹缓存，并持久化到 memory（关闭面板/重开/重启都不重复调用）
+  async function getLikesProfile() {
+    const sig = likesSig(), c = memoryRef.current.likesCache || {}
+    if (c.profileSig === sig && c.profile) return c.profile
+    const p = await analyzeTaste(memoryRef.current.likedTracks)
+    memoryRef.current.likesCache = { ...c, profileSig: sig, profile: p }; saveMemory()
+    return p
+  }
+  async function getLikesGroups() {
+    const sig = likesSig(), c = memoryRef.current.likesCache || {}
+    if (c.groupsSig === sig && c.groups) return c.groups
+    const g = await clusterLikes(memoryRef.current.likedTracks)
+    memoryRef.current.likesCache = { ...c, groupsSig: sig, groups: g }; saveMemory()
+    return g
   }
 
   // 对话点歌：解析意图（歌手/关键词）→ 歌手按本人搜、关键词按曲风搜 → 新点的排队首，保留当前曲
@@ -663,7 +703,7 @@ export default function App() {
         />
       </div>
 
-      <DJAnnouncement text={announcement} visible={showAnnouncement} />
+      <DJAnnouncement text={announcement} visible={showAnnouncement} speak={djSpeak} audioRef={audioRef} />
 
       <div style={{ ...styles.toast, opacity: toast ? 1 : 0, transform: toast ? 'translate(-50%,0)' : 'translate(-50%,8px)' }}>{toast}</div>
 
@@ -674,8 +714,11 @@ export default function App() {
           onClose={() => setShowLikes(false)}
           onPlayTrack={playLiked}
           onRemove={removeLiked}
-          onPlayRadio={startLikesRadio}
           onPlayGroup={playGroup}
+          onGenProfile={getLikesProfile}
+          onGenGroups={getLikesGroups}
+          initialProfile={memoryRef.current.likesCache?.profileSig === likesSig() ? memoryRef.current.likesCache.profile : null}
+          initialGroups={memoryRef.current.likesCache?.groupsSig === likesSig() ? memoryRef.current.likesCache.groups : null}
         />
       )}
     </div>

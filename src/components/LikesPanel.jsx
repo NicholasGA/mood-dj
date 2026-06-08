@@ -1,27 +1,29 @@
 import { useState } from 'react'
 import Icon from './Icon'
-import { analyzeTaste, clusterLikes } from '../services/claudeDJ'
 
-export default function LikesPanel({ likedTracks, accent = '#f472b6', onClose, onPlayTrack, onRemove, onPlayRadio, onPlayGroup }) {
-  const [profile, setProfile] = useState(null)
+export default function LikesPanel({ likedTracks, accent = '#f472b6', onClose, onPlayTrack, onRemove, onPlayGroup, onGenProfile, onGenGroups, initialProfile = null, initialGroups = null }) {
+  const [profile, setProfile] = useState(initialProfile)
   const [profileLoading, setProfileLoading] = useState(false)
-  const [groups, setGroups] = useState(null)
+  const [groups, setGroups] = useState(initialGroups)
   const [groupsLoading, setGroupsLoading] = useState(false)
   const [err, setErr] = useState('')
 
   const n = likedTracks.length
 
+  // 再点收起；首次生成走缓存（口味没变就不再花 AI 配额）
   async function genProfile() {
+    if (profile) { setProfile(null); return }
     if (n < 3) { setErr('喜欢的歌太少，多 ❤️ 几首再看画像'); return }
     setProfileLoading(true); setErr('')
-    try { setProfile(await analyzeTaste(likedTracks)) }
+    try { setProfile(await onGenProfile()) }
     catch { setErr('画像生成失败（AI 配额可能用完了，明天再试）') }
     finally { setProfileLoading(false) }
   }
   async function genGroups() {
+    if (groups) { setGroups(null); return }
     if (n < 4) { setErr('喜欢的歌太少，多 ❤️ 几首再分组'); return }
     setGroupsLoading(true); setErr('')
-    try { const g = await clusterLikes(likedTracks); setGroups(g.length ? g : []); if (!g.length) setErr('暂时分不出组，再多喜欢点歌') }
+    try { const g = await onGenGroups(); setGroups(g.length ? g : []); if (!g.length) setErr('暂时分不出组，再多喜欢点歌') }
     catch { setErr('分组失败（AI 配额可能用完了，明天再试）') }
     finally { setGroupsLoading(false) }
   }
@@ -34,25 +36,22 @@ export default function LikesPanel({ likedTracks, accent = '#f472b6', onClose, o
           <button style={s.close} onClick={onClose}>✕</button>
         </div>
 
-        {/* 三个差异化入口 */}
+        {/* 你的喜欢 = DJ 的记忆 */}
         <div style={s.actions}>
-          <button style={{ ...s.action, background: accent, color: '#fff', border: 'none' }} onClick={onPlayRadio} title="爱的歌 × AI 发现的同好新歌，无限续">
-            <Icon name="play" size={13} color="#fff" /> 喜欢电台
-          </button>
           <button style={s.action} onClick={genProfile} disabled={profileLoading}>
-            🪞 {profileLoading ? '分析中…' : '音乐画像'}
+            <Icon name="sparkles" size={13} color="#cbd5e1" /> {profileLoading ? '分析中…' : '音乐画像'}
           </button>
           <button style={s.action} onClick={genGroups} disabled={groupsLoading}>
-            🗂️ {groupsLoading ? '分组中…' : '自动分组'}
+            <Icon name="layers" size={13} color="#cbd5e1" /> {groupsLoading ? '分组中…' : '自动分组'}
           </button>
         </div>
-        <div style={s.hintLine}>喜欢电台 = 你爱的歌 + AI 挖的同类新歌，越听越懂你（QQ 收藏夹给不了的）</div>
+        <div style={s.hintLine}>你喜欢的歌 = DJ 的记忆：它会按你的口味挑歌，还在串场里跟你聊你的喜好</div>
         {err && <div style={s.err}>{err}</div>}
 
         {/* AI 音乐画像 */}
         {profile && (
           <div style={{ ...s.profile, borderColor: `${accent}44` }}>
-            <div style={s.profileLine}>🪞 {profile.personality}</div>
+            <div style={s.profileLine}><Icon name="sparkles" size={16} color={accent} /><span>{profile.personality}</span></div>
             <div style={s.chipRow}>
               {profile.genres.map(g => <span key={g} style={s.chip}>{g}</span>)}
               {profile.moods.map(m => <span key={m} style={{ ...s.chip, background: `${accent}22`, color: accent }}>{m}</span>)}
@@ -75,7 +74,7 @@ export default function LikesPanel({ likedTracks, accent = '#f472b6', onClose, o
         {/* 列表 */}
         <div style={s.list} className="lyrics-scroll">
           {n === 0
-            ? <div style={s.empty}>还没有喜欢的歌～<br />播放时点 ❤️，就会加到这里，还能开"喜欢电台"挖新歌</div>
+            ? <div style={s.empty}>还没有喜欢的歌～<br />播放时点 ❤️ 收藏，DJ 会记住你的口味——挑歌时偏向你，串场时跟你聊</div>
             : likedTracks.slice().reverse().map(t => (
               <div key={t.mid} style={s.row} className="like-row" onClick={() => onPlayTrack(t)}>
                 {t.album?.images?.[0]?.url
@@ -105,7 +104,7 @@ const s = {
   hintLine: { padding: '8px 18px 0', fontSize: 11, color: '#6b7280', lineHeight: 1.5 },
   err: { margin: '8px 18px 0', padding: '7px 12px', borderRadius: 8, background: 'rgba(239,68,68,0.12)', color: '#fca5a5', fontSize: 12 },
   profile: { margin: '12px 18px 0', padding: 14, borderRadius: 14, background: 'rgba(255,255,255,0.04)', border: '1px solid' },
-  profileLine: { fontSize: 14, color: '#f3f4f6', fontWeight: 600, lineHeight: 1.5, marginBottom: 8 },
+  profileLine: { display: 'flex', alignItems: 'flex-start', gap: 7, fontSize: 14, color: '#f3f4f6', fontWeight: 600, lineHeight: 1.5, marginBottom: 8 },
   chipRow: { display: 'flex', flexWrap: 'wrap', gap: 6 },
   chip: { fontSize: 11, padding: '3px 9px', borderRadius: 20, background: 'rgba(255,255,255,0.08)', color: '#cbd5e1' },
   explore: { marginTop: 8, fontSize: 12, color: '#9ca3af' },

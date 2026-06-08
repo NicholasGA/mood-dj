@@ -14,7 +14,7 @@ export function configureLLM(cfg = {}) {
 }
 export function hasLLMKey() { return GEMINI_KEYS.length > 0 || !!OPENROUTER_KEY }
 
-const KEY_COOLDOWN_MS = 30 * 60 * 1000   // 某 key 限流后冷却 30 分钟再试
+const KEY_COOLDOWN_MS = 90 * 1000   // 某 key 限流后冷却 90 秒再试（RPM 限流约 60s 恢复，别一次限流就半小时不可用）
 const keyCooldown = new Map()            // key -> 冷却截止时间戳
 
 let _lastCallTime = 0
@@ -232,16 +232,43 @@ ${numbered}
   })).filter(g => g.tracks.length)
 }
 
-export async function generateAnnouncement(prevTrack, nextTrack, moodName) {
+export async function generateAnnouncement(prevTrack, nextTrack, moodName, taste = {}) {
   const now = Date.now()
   if (now - _lastCallTime < ANNOUNCE_COOLDOWN) return ''
   _lastCallTime = now
-  const system = `你是个性鲜明的AI DJ，幽默热情有品味。中文，简洁有力，像真正的DJ说话。只输出一句播报文字，不要换行。`
+  // 「记得你」：把听众口味喂给 DJ，让它像认识你的人一样串场
+  const liked = taste.likedArtists || []
+  const nextArtists = (nextTrack.artists || []).map(a => a.name)
+  const knownArtist = nextArtists.find(n => liked.includes(n))
+  const tasteLine = liked.length
+    ? `\n听众的口味：常听 ${liked.slice(0, 5).join('、')}${taste.personality ? `（${taste.personality}）` : ''}。`
+    : ''
+  const memHint = knownArtist
+    ? `\n这首正是听众钟爱的「${knownArtist}」——像懂他的老朋友一样自然点出来（别肉麻、别每次都用同一句式）。`
+    : liked.length
+      ? `\n若这首刚好戳中他的口味，可自然带一句"这个对你胃口"；否则正常播报，别硬凑。`
+      : ''
+  const system = `你是个性鲜明、记得听众口味的AI DJ，幽默热情有品味。中文，简洁有力，像真正认识听众的DJ。只输出一句播报文字，不要换行。`
   const text = await gemini(system, `
 刚播: ${prevTrack ? `"${prevTrack.name}" - ${prevTrack.artists?.[0]?.name}` : '暂无'}
-接下来: "${nextTrack.name}" - ${nextTrack.artists?.[0]?.name}
-听众心情: ${moodName}
+接下来: "${nextTrack.name}" - ${nextArtists[0] || ''}
+听众心情: ${moodName}${tasteLine}${memHint}
 生成15-25字DJ过渡播报，必须简短（≤30字，只一句），有腔调。`, { maxTokens: 200 })
   // 兜底：太长就截到第一句
   return text.length > 36 ? text.split(/[。！!?？\n]/)[0].slice(0, 36) : text
+}
+
+// 单首歌一句话「故事」：结合歌词点出情绪/主题/创作背景。调用方按 mid 永久缓存复用 → 省配额
+export async function generateStory(track, lyricSnippet = '', taste = {}) {
+  const artist = track?.artists?.map(a => a.name).join('/') || '未知'
+  const tasteHint = taste.likedArtists?.length && taste.likedArtists.includes(track?.artists?.[0]?.name)
+    ? '（这是听众钟爱的歌手，可自然点一下）' : ''
+  const lyricBlock = lyricSnippet ? `\n部分歌词：\n${lyricSnippet}` : '\n（暂无歌词，可讲风格/情绪）'
+  const system = `你是博学、有洞察的音乐电台DJ。只输出一句话，不换行、不解释、不加引号。`
+  const text = await gemini(system, `
+歌曲：${track?.name} - ${artist}${tasteHint}${lyricBlock}
+
+用一句话(≤30字)介绍这首歌：优先结合上面的歌词点出它的情绪/故事/主题；若你确知真实创作背景可讲；不确定就讲风格，别编造具体事实(假获奖/假年份)。口语、有DJ腔。`, { maxTokens: 200, temperature: 0.85 })
+  const one = (text || '').split(/[\n。！!?？]/)[0].trim().replace(/^["“「]|["”」]$/g, '')
+  return one.slice(0, 40)
 }

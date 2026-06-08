@@ -1,24 +1,42 @@
 import { useEffect, useRef } from 'react'
+import Icon from './Icon'
 
-export default function DJAnnouncement({ text, visible }) {
+export default function DJAnnouncement({ text, visible, speak = true, audioRef }) {
   const spokenRef = useRef('')
+  const duckingRef = useRef(false)   // 当前是否正在压低音乐
+  const baseVolRef = useRef(1)       // 压低前的原始音量
 
   useEffect(() => {
     if (!visible || !text || text === spokenRef.current) return
     spokenRef.current = text
-    if ('speechSynthesis' in window) {
-      speechSynthesis.cancel()
-      const u = new SpeechSynthesisUtterance(text)
-      u.lang = 'zh-CN'
-      u.rate = 1.05
-      u.pitch = 1.1
-      // pick a Chinese voice if available
-      const voices = speechSynthesis.getVoices()
-      const cn = voices.find(v => v.lang.startsWith('zh'))
-      if (cn) u.voice = cn
-      speechSynthesis.speak(u)
+    // 文字每首都显示；只有 speak 时才出声（App 已做 ≥45s 节流）
+    if (!speak || !('speechSynthesis' in window)) return
+
+    const audio = audioRef?.current
+    let safety = null
+    const restore = () => {
+      if (safety) { clearTimeout(safety); safety = null }
+      if (audio && duckingRef.current) { audio.volume = baseVolRef.current; duckingRef.current = false }
     }
-  }, [text, visible])
+
+    const u = new SpeechSynthesisUtterance(text)
+    u.lang = 'zh-CN'; u.rate = 1.0; u.pitch = 1.05; u.volume = 0.9
+    const cn = speechSynthesis.getVoices().find(v => v.lang.startsWith('zh'))
+    if (cn) u.voice = cn
+    u.onstart = () => {
+      if (!audio) return
+      if (!duckingRef.current) baseVolRef.current = audio.volume   // 记下真实音量
+      duckingRef.current = true
+      audio.volume = +(baseVolRef.current * 0.28).toFixed(2)       // 像电台一样把音乐压低
+      safety = setTimeout(restore, 12000)                          // 兜底：万一 onend 不触发也能复原
+    }
+    u.onend = restore
+    u.onerror = restore
+
+    speechSynthesis.cancel()
+    speechSynthesis.speak(u)
+    return () => { speechSynthesis.cancel(); restore() }
+  }, [text, visible, speak])
 
   return (
     <div style={{
@@ -26,7 +44,7 @@ export default function DJAnnouncement({ text, visible }) {
       opacity: visible ? 1 : 0,
       transform: visible ? 'translateY(0)' : 'translateY(20px)',
     }}>
-      <span style={styles.mic}>🎙️</span>
+      <span style={styles.mic}><Icon name="mic" size={16} color="#c4b5fd" /></span>
       <span style={styles.text}>{text}</span>
     </div>
   )
@@ -42,6 +60,6 @@ const styles = {
     boxShadow: '0 0 30px rgba(124,58,237,0.2)',
     maxWidth: '70vw',
   },
-  mic: { fontSize: 18, flexShrink: 0 },
+  mic: { display: 'inline-flex', flexShrink: 0 },
   text: { fontSize: 15, color: '#e5e7eb', fontWeight: 500, lineHeight: 1.4 },
 }
