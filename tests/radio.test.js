@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { capPerArtist, excludeRecent, pushRecent, freshen } from '../src/services/radio'
+import { capPerArtist, excludeRecent, pushRecent, freshen, removeAt, moveToFront } from '../src/services/radio'
 
 const mk = (mid, artist) => ({ mid, artists: [{ name: artist }] })
 
@@ -48,5 +48,28 @@ describe('freshen', () => {
     const list = [mk('1', 'A'), mk('2', 'B')]
     const out = freshen(list, new Set(['1', '2']), { maxPer: 2, min: 6 })
     expect(out.map(t => t.mid)).toEqual(['1', '2'])
+  })
+})
+
+describe('removeAt', () => {
+  it('删除指定下标，返回新数组', () => {
+    expect(removeAt(['a', 'b', 'c'], 1)).toEqual(['a', 'c'])
+    expect(removeAt(['a', 'b', 'c'], 0)).toEqual(['b', 'c'])
+  })
+  it('越界 → 原样副本', () => {
+    const l = ['a', 'b']
+    expect(removeAt(l, 5)).toEqual(['a', 'b'])
+    expect(removeAt(l, -1)).toEqual(['a', 'b'])
+    expect(removeAt(l, 0)).not.toBe(l)
+  })
+})
+
+describe('moveToFront', () => {
+  it('把第 i 项移到队首，其余顺序不变', () => {
+    expect(moveToFront(['a', 'b', 'c', 'd'], 2)).toEqual(['c', 'a', 'b', 'd'])
+  })
+  it('i=0 或越界 → 原样副本', () => {
+    expect(moveToFront(['a', 'b'], 0)).toEqual(['a', 'b'])
+    expect(moveToFront(['a', 'b'], 9)).toEqual(['a', 'b'])
   })
 })

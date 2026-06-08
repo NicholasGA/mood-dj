@@ -1,0 +1,54 @@
+import Icon from './Icon'
+
+// 播放队列面板：看接下来要播的，支持播放某首 / 置顶(下一首) / 移除 / 清空
+export default function QueuePanel({ queue = [], accent = '#31c27c', onClose, onPlayAt, onToFront, onRemove, onClear }) {
+  return (
+    <div style={s.overlay} onClick={onClose}>
+      <div style={s.panel} className="fade-up" onClick={e => e.stopPropagation()}>
+        <div style={s.head}>
+          <span style={s.title}>接下来播放 · {queue.length} 首</span>
+          {queue.length > 0 && <button style={s.clear} onClick={onClear}>清空</button>}
+          <button style={s.close} onClick={onClose}>✕</button>
+        </div>
+
+        <div style={s.list} className="lyrics-scroll">
+          {queue.length === 0
+            ? <div style={s.empty}>队列空了～开个电台就会自动续上</div>
+            : queue.map((t, i) => (
+              <div key={`${t.mid}-${i}`} style={s.row} className="like-row">
+                <span style={{ ...s.num, color: accent }}>{i + 1}</span>
+                {t.album?.images?.[0]?.url
+                  ? <img src={t.album.images[0].url} alt="" style={s.cover} />
+                  : <div style={{ ...s.cover, ...s.coverPh }}>♪</div>}
+                <div style={s.meta} onClick={() => onPlayAt(i)} title="从这首开始播">
+                  <div style={s.name}>{t.name}</div>
+                  <div style={s.artist}>{t.artists?.map(a => a.name).join(', ')}</div>
+                </div>
+                {i > 0 && <button style={s.act} title="下一首就播" onClick={() => onToFront(i)}><Icon name="flame" size={14} color="#cbd5e1" /></button>}
+                <button style={s.act} title="从队列移除" onClick={() => onRemove(i)}><Icon name="thumbsDown" size={14} color="#cbd5e1" /></button>
+              </div>
+            ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+const s = {
+  overlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)', zIndex: 400, display: 'flex', alignItems: 'center', justifyContent: 'center' },
+  panel: { width: 'min(460px, 92vw)', maxHeight: '78vh', display: 'flex', flexDirection: 'column', background: 'rgba(16,16,22,0.97)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 18, boxShadow: '0 30px 80px rgba(0,0,0,0.6)', overflow: 'hidden' },
+  head: { display: 'flex', alignItems: 'center', gap: 10, padding: '16px 18px 12px' },
+  title: { fontSize: 15, fontWeight: 700, color: '#f9fafb' },
+  clear: { marginLeft: 'auto', padding: '4px 10px', borderRadius: 8, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', color: '#cbd5e1', fontSize: 12, cursor: 'pointer' },
+  close: { width: 26, height: 26, borderRadius: 8, background: 'rgba(255,255,255,0.08)', border: 'none', color: '#cbd5e1', fontSize: 13, cursor: 'pointer' },
+  list: { overflowY: 'auto', padding: 10 },
+  empty: { padding: '40px 24px', textAlign: 'center', color: '#9ca3af', fontSize: 13 },
+  row: { display: 'flex', alignItems: 'center', gap: 10, padding: 8, borderRadius: 12 },
+  num: { width: 20, textAlign: 'center', fontSize: 12, fontWeight: 700, flexShrink: 0 },
+  cover: { width: 40, height: 40, borderRadius: 8, objectFit: 'cover', flexShrink: 0 },
+  coverPh: { display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(255,255,255,0.06)', fontSize: 18 },
+  meta: { flex: 1, minWidth: 0, cursor: 'pointer' },
+  name: { fontSize: 14, fontWeight: 600, color: '#f3f4f6', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
+  artist: { fontSize: 12, color: '#9ca3af', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', marginTop: 2 },
+  act: { width: 28, height: 28, borderRadius: 8, background: 'transparent', border: 'none', cursor: 'pointer', flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' },
+}

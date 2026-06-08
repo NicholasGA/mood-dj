@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import Lyrics from './Lyrics'
 import Icon from './Icon'
 
-export default function NowPlaying({ track, isPlaying, loadingTrack, audioRef, onNext, queueCount, onTogglePlay, lyric, accent = '#31c27c', onVibe, onDislike, onSteer, onLike }) {
+export default function NowPlaying({ track, isPlaying, loadingTrack, audioRef, onNext, queueCount, onTogglePlay, lyric, accent = '#31c27c', onVibe, onDislike, onSteer, onLike, onOpenQueue }) {
   const [progress, setProgress] = useState(0)
   const [dur, setDur] = useState(0)
   const [vol, setVol] = useState(80)
@@ -110,7 +110,7 @@ export default function NowPlaying({ track, isPlaying, loadingTrack, audioRef, o
             title="跳到下一段副歌"
           ><Icon name="star" size={13} color={accent} /> 副歌</button>
         )}
-        <span style={s.badge}>队列 {queueCount}</span>
+        <button style={{ ...s.badge, cursor: 'pointer', border: 'none' }} onClick={onOpenQueue} title="查看/管理播放队列">队列 {queueCount}</button>
       </div>
 
       {track && onVibe && (

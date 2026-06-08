@@ -31,3 +31,17 @@ export function freshen(tracks, recentSet, { maxPer = 2, min = 6 } = {}) {
   const a = capPerArtist(excludeRecent(tracks, recentSet), maxPer)
   return a.length >= min ? a : capPerArtist(tracks || [], maxPer)
 }
+
+// 队列操作（纯函数，返回新数组）：删除第 i 项
+export function removeAt(list, i) {
+  if (!Array.isArray(list) || i < 0 || i >= list.length) return (list || []).slice()
+  return list.slice(0, i).concat(list.slice(i + 1))
+}
+// 把第 i 项移到队首（下一首就播）
+export function moveToFront(list, i) {
+  if (!Array.isArray(list) || i <= 0 || i >= list.length) return (list || []).slice()
+  const copy = list.slice()
+  const [item] = copy.splice(i, 1)
+  copy.unshift(item)
+  return copy
+}

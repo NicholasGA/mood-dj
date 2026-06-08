@@ -9,7 +9,8 @@ import Icon from './components/Icon'
 import { searchTracks, getSongUrl, getLyric, searchPlaylists, getPlaylistTracks, searchByArtist } from './services/qqMusicApi'
 import { analyzeMood, generateStory, curateTracks, interpretRequest, configureLLM, hasLLMKey, analyzeTaste } from './services/claudeDJ'
 import { localStory, localMoodConfig } from './services/djText'
-import { freshen, pushRecent } from './services/radio'
+import { freshen, pushRecent, removeAt, moveToFront } from './services/radio'
+import QueuePanel from './components/QueuePanel'
 import { keyToAction } from './services/shortcuts'
 import { remainingLabel, sleepVolume, nextDuration } from './services/sleepTimer'
 import { extractAlbumColors } from './services/albumColor'
@@ -30,6 +31,7 @@ export default function App() {
   const [favCount, setFavCount] = useState(0)   // 已接入的 QQ收藏数（仅用于 UI 提示）
   const [likedCount, setLikedCount] = useState(0)   // 本地喜欢数量（喂口味，不再单独展示面板）
   const [tasteProfile, setTasteProfile] = useState(null)   // AI 音乐画像，无感呈现在主界面
+  const [showQueue, setShowQueue] = useState(false)   // 播放队列面板
   const [sleepMin, setSleepMin] = useState(0)   // 睡眠定时（分钟，0=关）
   const [sleepLeft, setSleepLeft] = useState('')   // 剩余 mm:ss
   const sleepEndRef = useRef(0)
@@ -187,6 +189,12 @@ export default function App() {
     }, 1000)
     return () => clearInterval(id)
   }, [sleepMin])
+
+  // 播放队列面板操作
+  function queuePlayAt(i) { const q = queueRef.current.slice(i); queueRef.current = q; setQueue(q); setShowQueue(false); playNext() }
+  function queueToFront(i) { const q = moveToFront(queueRef.current, i); queueRef.current = q; setQueue(q) }
+  function queueRemove(i) { const q = removeAt(queueRef.current, i); queueRef.current = q; setQueue(q) }
+  function queueClear() { queueRef.current = []; setQueue([]); setShowQueue(false) }
 
   // 当前歌曲变化时，从封面提取主题色（失败则回退心情色）
   useEffect(() => {
@@ -728,12 +736,25 @@ export default function App() {
           onDislike={dislikeCurrent}
           onSteer={steerRadio}
           onLike={likeCurrent}
+          onOpenQueue={() => setShowQueue(true)}
         />
       </div>
 
       <DJAnnouncement text={announcement} visible={showAnnouncement} speak={djSpeak} audioRef={audioRef} />
 
       <div style={{ ...styles.toast, opacity: toast ? 1 : 0, transform: toast ? 'translate(-50%,0)' : 'translate(-50%,8px)' }}>{toast}</div>
+
+      {showQueue && (
+        <QueuePanel
+          queue={queue}
+          accent={accent}
+          onClose={() => setShowQueue(false)}
+          onPlayAt={queuePlayAt}
+          onToFront={queueToFront}
+          onRemove={queueRemove}
+          onClear={queueClear}
+        />
+      )}
     </div>
   )
 }
