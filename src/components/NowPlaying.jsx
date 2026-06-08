@@ -75,9 +75,9 @@ export default function NowPlaying({ track, isPlaying, loadingTrack, audioRef, o
 
   return (
     <div style={s.card} className="fade-up">
-      <div style={s.albumWrap}>
+      <div style={s.albumWrap} className={isPlaying ? 'floaty' : ''}>
         {art
-          ? <img src={art} alt={title} style={{ ...s.album, boxShadow: isPlaying ? `0 0 50px ${accent}88` : '0 6px 24px rgba(0,0,0,0.45)' }} />
+          ? <img src={art} alt={title} style={{ ...s.album, boxShadow: isPlaying ? `0 12px 50px ${accent}99` : '0 8px 28px rgba(0,0,0,0.5)' }} />
           : <div style={{ ...s.album, ...s.ph }}>🎵</div>
         }
         {isPlaying && <div style={{ ...s.ring, borderColor: `${accent}66` }} />}
@@ -98,7 +98,7 @@ export default function NowPlaying({ track, isPlaying, loadingTrack, audioRef, o
       </div>
 
       <div style={s.controls}>
-        <button style={s.btn} onClick={onTogglePlay}>
+        <button style={{ ...s.btn, ...s.btnMain, background: `linear-gradient(135deg, ${accent}, ${accent}cc)`, boxShadow: `0 6px 20px ${accent}66` }} onClick={onTogglePlay}>
           {isPlaying ? '⏸' : '▶'}
         </button>
         <button style={s.btn} onClick={onNext}>⏭</button>
@@ -154,7 +154,7 @@ export default function NowPlaying({ track, isPlaying, loadingTrack, audioRef, o
 }
 
 const s = {
-  card: { background: 'rgba(10,10,10,0.7)', backdropFilter: 'blur(24px)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 20, padding: 24, display: 'flex', flexDirection: 'column', gap: 16, alignItems: 'center' },
+  card: { background: 'rgba(12,12,16,0.72)', backdropFilter: 'blur(28px)', border: '1px solid rgba(255,255,255,0.09)', borderRadius: 22, padding: 26, display: 'flex', flexDirection: 'column', gap: 16, alignItems: 'center', boxShadow: '0 24px 60px rgba(0,0,0,0.4)' },
   albumWrap: { position: 'relative', width: 180, height: 180 },
   album: { width: 180, height: 180, borderRadius: 12, objectFit: 'cover', display: 'block', transition: 'box-shadow .5s' },
   ph: { background: 'rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 48 },
@@ -169,7 +169,8 @@ const s = {
   knob: { position: 'absolute', top: '50%', width: 11, height: 11, borderRadius: '50%', transform: 'translate(-50%,-50%)', boxShadow: '0 0 8px rgba(0,0,0,0.4)' },
   controls: { display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', justifyContent: 'center' },
   chorusBtn: { height: 30, padding: '0 12px', borderRadius: 16, background: 'rgba(255,255,255,0.05)', border: '1px solid', fontSize: 12, fontWeight: 600, cursor: 'pointer' },
-  btn: { width: 48, height: 48, borderRadius: '50%', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.15)', color: '#fff', fontSize: 20, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' },
+  btn: { width: 46, height: 46, borderRadius: '50%', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.15)', color: '#fff', fontSize: 19, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  btnMain: { width: 58, height: 58, fontSize: 24, border: 'none' },
   badge: { fontSize: 12, color: '#6b7280', background: 'rgba(255,255,255,0.06)', padding: '4px 10px', borderRadius: 20 },
   volRow: { display: 'flex', alignItems: 'center', gap: 8, width: '100%' },
   vibeRow: { display: 'flex', gap: 6, width: '100%', justifyContent: 'center', alignItems: 'center', flexWrap: 'wrap' },

@@ -54,10 +54,15 @@ html, body, #root {
 .drag-region { -webkit-app-region: drag; }
 .no-drag { -webkit-app-region: no-drag; }
 
-button { transition: filter .15s ease, transform .1s ease, background .2s ease, border-color .2s ease, box-shadow .2s ease; }
+button { transition: filter .18s ease, transform .14s cubic-bezier(.34,1.56,.64,1), background .2s ease, border-color .2s ease, box-shadow .22s ease; }
 button:disabled { opacity: 0.45; cursor: not-allowed; }
-button:not(:disabled):hover { filter: brightness(1.12); }
-button:not(:disabled):active { transform: scale(0.95); }
+button:not(:disabled):hover {
+  filter: brightness(1.16);
+  transform: translateY(-2px);
+  border-color: rgba(255,255,255,0.28);
+  box-shadow: 0 8px 22px rgba(0,0,0,0.38);
+}
+button:not(:disabled):active { transform: translateY(0) scale(0.95); filter: brightness(1.04); box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
 
 input, textarea { transition: border-color .2s ease, background .2s ease, box-shadow .2s ease; }
 input:focus, textarea:focus {
@@ -66,6 +71,22 @@ input:focus, textarea:focus {
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent, #7c3aed) 22%, transparent);
 }
 
-/* 卡片/面板入场 */
-@keyframes fadeUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-.fade-up { animation: fadeUp .4s ease both; }
+/* 入场动效 */
+@keyframes fadeUp { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
+.fade-up { animation: fadeUp .5s cubic-bezier(.22,.61,.36,1) both; }
+
+/* 错峰入场：给容器加 .stagger，子元素依次淡入上浮 */
+.stagger > * { animation: fadeUp .45s cubic-bezier(.22,.61,.36,1) both; }
+.stagger > *:nth-child(1){animation-delay:.04s}
+.stagger > *:nth-child(2){animation-delay:.08s}
+.stagger > *:nth-child(3){animation-delay:.12s}
+.stagger > *:nth-child(4){animation-delay:.16s}
+.stagger > *:nth-child(5){animation-delay:.20s}
+.stagger > *:nth-child(6){animation-delay:.24s}
+
+/* 专辑封面轻微漂浮 */
+@keyframes floaty { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-7px); } }
+.floaty { animation: floaty 5s ease-in-out infinite; }
+
+/* 卡片悬停微抬升 */
+.card-hover { transition: box-shadow .3s ease, transform .3s ease; }

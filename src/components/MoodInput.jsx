@@ -71,7 +71,7 @@ export default function MoodInput({ onStart, isLoading, isActive, moodConfig }) 
         >▶ 就这个</button>
       </div>
 
-      <div style={styles.presets}>
+      <div style={styles.presets} className="stagger">
         {PRESET_MOODS.map(p => (
           <button key={p.label} style={styles.preset} onClick={() => applyPreset(p)}>
             <span>{p.emoji}</span>
@@ -141,9 +141,10 @@ function SliderRow({ label, leftTip, rightTip, value, onChange, accent }) {
 
 const styles = {
   panel: {
-    background: 'rgba(10,10,10,0.7)', backdropFilter: 'blur(24px)',
-    border: '1px solid rgba(255,255,255,0.08)', borderRadius: 20,
-    padding: 24, display: 'flex', flexDirection: 'column', gap: 16,
+    background: 'rgba(12,12,16,0.72)', backdropFilter: 'blur(28px)',
+    border: '1px solid rgba(255,255,255,0.09)', borderRadius: 22,
+    padding: 26, display: 'flex', flexDirection: 'column', gap: 16,
+    boxShadow: '0 24px 60px rgba(0,0,0,0.4)',
   },
   heading: { fontSize: 18, fontWeight: 700, color: '#f9fafb', margin: 0 },
   suggest: { display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px', borderRadius: 14, border: '1px solid' },
