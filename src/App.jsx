@@ -4,7 +4,8 @@ import MoodInput from './components/MoodInput'
 import NowPlaying from './components/NowPlaying'
 import Visualizer from './components/Visualizer'
 import DJAnnouncement from './components/DJAnnouncement'
-import { searchTracks, getSongUrl, getLyric } from './services/qqMusicApi'
+import MiniPlayer from './components/MiniPlayer'
+import { searchTracks, getSongUrl, getLyric, searchPlaylists, getPlaylistTracks } from './services/qqMusicApi'
 import { analyzeMood, generateAnnouncement, curateTracks } from './services/claudeDJ'
 import { extractAlbumColors } from './services/albumColor'
 
@@ -20,6 +21,7 @@ export default function App() {
   const [loadingTrack, setLoadingTrack] = useState(false)
   const [albumColors, setAlbumColors] = useState(null)
   const [lyric, setLyric] = useState({ lines: [], choruses: [], hasTrans: false })
+  const [miniMode, setMiniMode] = useState(false)
   const [error, setError] = useState('')
 
   const audioRef = useRef(new Audio())
@@ -30,6 +32,8 @@ export default function App() {
   const isAdvancingRef = useRef(false)
   const audioCtxRef = useRef(null)
   const analyserRef = useRef(null)
+  const radioRef = useRef(null)        // 当前电台上下文：{ queries, playlistIds, seen }，用于无限补歌
+  const replenishPromiseRef = useRef(null)   // 进行中的补歌 promise（合并并发调用，避免竞态）
 
   // 懒初始化 Web Audio 分析器（只能对一个 <audio> 创建一次 source）
   const ensureAnalyser = useCallback(() => {
@@ -82,6 +86,14 @@ export default function App() {
     return () => { cancelled = true }
   }, [currentTrack])
 
+  // 逃生通道：迷你模式下按 Esc 一定能还原
+  useEffect(() => {
+    if (!miniMode) return
+    const onKey = (e) => { if (e.key === 'Escape') toggleMini(false) }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [miniMode])
+
   // Set up audio element events
   useEffect(() => {
     const audio = audioRef.current
@@ -126,37 +138,131 @@ export default function App() {
     await audioRef.current.play()
   }, [ensureAnalyser])
 
-  // 从队列依次试播，自动跳过需 VIP / 无版权的歌，直到放出一首或试完
+  // 无限补歌：随机翻页 + 已知歌单随机段 + 自动发现新歌单；按 mid 去重，合并并发调用
+  const replenishQueue = useCallback(() => {
+    const ctx = radioRef.current
+    if (!ctx) return Promise.resolve(0)
+    if (replenishPromiseRef.current) return replenishPromiseRef.current   // 复用进行中的，避免竞态
+    const run = async () => {
+      const fresh = []
+      const add = (arr) => { for (const t of arr || []) if (t?.mid && !ctx.seen.has(t.mid)) { ctx.seen.add(t.mid); fresh.push(t) } }
+      // 1) 单曲搜索：随机翻页（页码范围更大，避开热门）
+      await Promise.allSettled(ctx.queries.map(q =>
+        searchTracks(qqCookiesRef.current, q, 15, 1 + Math.floor(Math.random() * 8)).then(add).catch(() => {})))
+      // 2) 已知歌单随机翻段
+      if (ctx.playlistIds.length) {
+        const pid = ctx.playlistIds[Math.floor(Math.random() * ctx.playlistIds.length)]
+        await getPlaylistTracks(qqCookiesRef.current, pid, 50, Math.floor(Math.random() * 4) * 50).then(add).catch(() => {})
+      }
+      // 3) 发现新歌单（真·无限）：搜一个还没用过的歌单加入
+      if (fresh.length < 12 || Math.random() < 0.5) {
+        const q = ctx.queries[Math.floor(Math.random() * ctx.queries.length)]
+        try {
+          const pls = await searchPlaylists(qqCookiesRef.current, q, 12)
+          const np = pls.find(p => !ctx.playlistIds.includes(p.id))
+          if (np) { ctx.playlistIds.push(np.id); await getPlaylistTracks(qqCookiesRef.current, np.id, 50).then(add).catch(() => {}) }
+        } catch {}
+      }
+      if (fresh.length) {
+        fresh.sort(() => Math.random() - 0.5)
+        const merged = [...queueRef.current, ...fresh]
+        queueRef.current = merged
+        setQueue(merged)
+      }
+      return fresh.length
+    }
+    const p = run().finally(() => { replenishPromiseRef.current = null })
+    replenishPromiseRef.current = p
+    return p
+  }, [])
+
+  // 从队列依次试播，跳过不可播的；队列见底自动补歌 → 不间断电台
   const playNext = useCallback(async () => {
     if (isAdvancingRef.current) return
     isAdvancingRef.current = true
     setLoadingTrack(true)
     try {
-      const q = [...queueRef.current]
-      const hadTracks = q.length > 0
-      let tried = 0
-      while (q.length > 0 && tried < 15) {
+      let q = [...queueRef.current]
+      let tried = 0, rounds = 0
+      while (tried < 40) {
+        if (q.length === 0) {
+          // 见底了：等补歌（会合并进行中的，解决竞态），最多补 3 轮
+          if (radioRef.current && rounds < 3) {
+            rounds++
+            await replenishQueue()
+            q = [...queueRef.current]
+            continue
+          }
+          break
+        }
         tried++
         const next = q.shift()
         try {
           await playTrack(next)
           showDJ(next)            // 此时 currentTrackRef 仍是上一首，作为"刚播"
           setCurrentTrack(next)
+          queueRef.current = q
           setQueue(q)
           setError('')
+          if (q.length < 6) replenishQueue()          // 偏低就后台补歌（不阻塞）
           return
         } catch { /* 这首放不了，试下一首 */ }
       }
-      // 走到这里：队列空了
-      setQueue([])
+      setQueue([]); queueRef.current = []
       setCurrentTrack(null)
       setIsPlaying(false)
-      if (hadTracks) setError('这批歌大多需要 QQ音乐 VIP 或暂无版权，换个心情描述、或登录 VIP 账号再试')
+      setError('暂时没找到能播放的歌，换个心情描述试试')
     } finally {
       isAdvancingRef.current = false
       setLoadingTrack(false)
     }
-  }, [showDJ, playTrack])
+  }, [showDJ, playTrack, replenishQueue])
+
+  // ── 系统媒体控制（Windows SMTC / 媒体键 / 锁屏）─────────────────
+  // 动作处理（播放/暂停/上下曲/快进退）
+  useEffect(() => {
+    if (!('mediaSession' in navigator)) return
+    const audio = audioRef.current
+    const ms = navigator.mediaSession
+    const set = (a, fn) => { try { ms.setActionHandler(a, fn) } catch {} }
+    set('play', () => audio.play().catch(() => {}))
+    set('pause', () => audio.pause())
+    set('nexttrack', () => playNext())
+    set('previoustrack', () => { audio.currentTime = 0 })   // 无历史，回到本曲开头
+    set('seekto', (d) => { if (d.seekTime != null) audio.currentTime = d.seekTime })
+    set('seekforward', (d) => { audio.currentTime = Math.min(audio.duration || 1e9, audio.currentTime + (d.seekOffset || 10)) })
+    set('seekbackward', (d) => { audio.currentTime = Math.max(0, audio.currentTime - (d.seekOffset || 10)) })
+    return () => ['play', 'pause', 'nexttrack', 'previoustrack', 'seekto', 'seekforward', 'seekbackward'].forEach(a => set(a, null))
+  }, [playNext])
+
+  // 元数据（标题/歌手/专辑/封面）随当前歌更新
+  useEffect(() => {
+    if (!('mediaSession' in navigator) || typeof MediaMetadata === 'undefined') return
+    if (!currentTrack) { navigator.mediaSession.metadata = null; return }
+    const art = currentTrack.album?.images?.[0]?.url
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title: currentTrack.name || '',
+      artist: currentTrack.artists?.map(a => a.name).join(', ') || '',
+      album: currentTrack.album?.name || '',
+      artwork: art ? [{ src: art, sizes: '300x300', type: 'image/jpeg' }] : [],
+    })
+  }, [currentTrack])
+
+  // 播放态 + 进度上报（OS 进度条）
+  useEffect(() => {
+    if ('mediaSession' in navigator) navigator.mediaSession.playbackState = isPlaying ? 'playing' : 'paused'
+  }, [isPlaying])
+  useEffect(() => {
+    const audio = audioRef.current
+    const onTime = () => {
+      if (!('mediaSession' in navigator) || !navigator.mediaSession.setPositionState) return
+      if (audio.duration && isFinite(audio.duration)) {
+        try { navigator.mediaSession.setPositionState({ duration: audio.duration, position: audio.currentTime, playbackRate: audio.playbackRate || 1 }) } catch {}
+      }
+    }
+    audio.addEventListener('timeupdate', onTime)
+    return () => audio.removeEventListener('timeupdate', onTime)
+  }, [])
 
   async function startRadio(moodText, energy, valence) {
     setIsLoading(true); setError('')
@@ -179,16 +285,27 @@ export default function App() {
       setShowAnnouncement(true)
       setTimeout(() => setShowAnnouncement(false), 6000)
 
+      const queries = config.search_queries || []
       const allTracks = [], seen = new Set()
-      for (const q of config.search_queries) {
-        const tracks = await searchTracks(qqCookies, q, 15)
-        for (const t of tracks) {
-          if (!seen.has(t.id)) { seen.add(t.id); allTracks.push(t) }
-        }
-      }
+      const add = (arr) => { for (const t of arr || []) if (t?.mid && !seen.has(t.mid)) { seen.add(t.mid); allTracks.push(t) } }
+      const ok = (results) => results.forEach(r => r.status === 'fulfilled' && add(r.value))
+
+      // 1) 单曲搜索（并发，随机翻页，每次都不一样）
+      ok(await Promise.allSettled(queries.map(q => searchTracks(qqCookies, q, 15, 1 + Math.floor(Math.random() * 4)))))
+
+      // 2) 歌单源（并发）：搜人工歌单 → 挑歌量充足的几个 → 捞歌进池
+      const plLists = await Promise.allSettled(queries.slice(0, 2).map(q => searchPlaylists(qqCookies, q, 6)))
+      const picked = []
+      plLists.forEach(r => r.status === 'fulfilled' && r.value.slice(0, 3).forEach(p => { if (!picked.includes(p.id)) picked.push(p.id) }))
+      const playlistIds = picked.slice(0, 4)
+      ok(await Promise.allSettled(playlistIds.map(id => getPlaylistTracks(qqCookies, id, 50))))
+
       if (allTracks.length === 0) throw new Error('未找到匹配曲目，请换个描述')
 
-      // AI 精排：按心情挑选+排序；失败则回退随机洗牌
+      // 存电台上下文，供无限补歌复用
+      radioRef.current = { queries, playlistIds, seen }
+
+      // AI 精排：按心情挑选+排序（精排只看前若干首）；其余作为后续曲库
       try {
         shuffled = await curateTracks(allTracks, config, energy, valence)
       } catch {
@@ -210,6 +327,11 @@ export default function App() {
     isPlaying ? audio.pause() : audio.play()
   }
 
+  function toggleMini(on) {
+    window.electronAPI.setMini(on)
+    setMiniMode(on)
+  }
+
   function logout() {
     audioRef.current.pause()
     audioRef.current.src = ''
@@ -227,6 +349,19 @@ export default function App() {
   const vizMood = moodConfig ? { ...moodConfig, color_primary: accent, color_secondary: accent2 } : null
   const ambientArt = currentTrack?.album?.images?.[0]?.url
 
+  // 迷你播放器模式：整窗渲染紧凑卡片（音频/状态共用，不中断播放）
+  if (miniMode) {
+    return (
+      <div style={{ '--accent': accent, position: 'fixed', inset: 0, background: '#0a0a0a', overflow: 'hidden' }}>
+        <MiniPlayer
+          track={currentTrack} isPlaying={isPlaying} audioRef={audioRef}
+          accent={accent} accent2={accent2} lyric={lyric} analyser={analyserRef}
+          onTogglePlay={togglePlay} onNext={playNext} onExit={() => toggleMini(false)}
+        />
+      </div>
+    )
+  }
+
   return (
     <div style={{ '--accent': accent, '--accent2': accent2, ...styles.root }}>
       {ambientArt && <img src={ambientArt} alt="" aria-hidden style={styles.ambient} key={ambientArt} />}
@@ -236,6 +371,7 @@ export default function App() {
         {moodConfig && <span style={{ ...styles.tag, background: `${accent}33`, color: accent }}>{moodConfig.mood_name}</span>}
         <div style={styles.winCtrl}>
           <span style={styles.user} onClick={logout} title="退出登录">QQ音乐 ✕</span>
+          <button style={styles.wBtn} onClick={() => toggleMini(true)} title="迷你播放器（置顶小窗）">▭</button>
           <button style={styles.wBtn} onClick={() => window.electronAPI.minimize()}>—</button>
           <button style={styles.wBtn} onClick={() => window.electronAPI.maximize()}>□</button>
           <button style={{ ...styles.wBtn, color: '#f87171' }} onClick={() => window.electronAPI.close()}>✕</button>

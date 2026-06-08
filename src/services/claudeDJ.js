@@ -55,7 +55,8 @@ export async function analyzeMood(text, energy, valence, platform = 'qq') {
 请据此生成 5 个${lang}音乐搜索词，要求：
 - 5 个词覆盖不同角度（曲风、场景、节奏、年代或语种、代表性关键词），彼此区分度高，避免雷同和泛词。
 - 必须体现能量与情绪：高能量→快节奏/电子/摇滚/燃；低能量→慢歌/民谣/钢琴/氛围；高情绪→欢快/阳光/甜；低情绪→伤感/治愈/深夜。
-- 每个词 2-6 字，像真实搜索关键词，不要整句。
+- **兼顾多语种**：在贴合心情、且用户没有明确限定语种的前提下，让 5 个词跨语种——至少包含 1 个日系/J-POP（如"日系 治愈"/"J-POP 抒情"/"日语 城市流行"/"动漫 燃"），并可含欧美、韩系，别全是华语。
+- 每个词 2-6 字/词，像真实搜索关键词，不要整句。
 
 返回JSON:
 {
@@ -103,11 +104,11 @@ ${numbered}
   const picked = [], seen = new Set()
   for (const n of order) {
     const t = pool[n - 1]
-    if (t && !seen.has(t.id)) { seen.add(t.id); picked.push(t) }
+    if (t?.mid && !seen.has(t.mid)) { seen.add(t.mid); picked.push(t) }
   }
   if (picked.length < 5) throw new Error('curate invalid')
   // 没被选中的接在后面，保证队列不至于太短
-  const rest = tracks.filter(t => !seen.has(t.id))
+  const rest = tracks.filter(t => t?.mid && !seen.has(t.mid))
   return [...picked, ...rest]
 }
 

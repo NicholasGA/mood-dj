@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, net, protocol } = require('electron')
+const { app, BrowserWindow, ipcMain, net, protocol, screen } = require('electron')
 const path = require('path')
 const fs = require('fs')
 
@@ -223,6 +223,37 @@ ipcMain.handle('clear-qq-cookies',() => { try { fs.unlinkSync(qqFile()) } catch 
 ipcMain.on('win-minimize', () => mainWindow.minimize())
 ipcMain.on('win-maximize', () => mainWindow.isMaximized() ? mainWindow.unmaximize() : mainWindow.maximize())
 ipcMain.on('win-close',    () => mainWindow.close())
+
+// ── 迷你播放器：把主窗口切成置顶小窗 / 还原 ───────────────────────
+let prevBounds = null
+ipcMain.handle('set-mini', (_e, on) => {
+  if (!mainWindow) return
+  try {
+    if (on) {
+      prevBounds = mainWindow.getBounds()
+      if (mainWindow.isMaximized()) mainWindow.unmaximize()
+      const W = 400, H = 112
+      const wa = screen.getPrimaryDisplay().workArea
+      const x = Math.max(wa.x, wa.x + wa.width - W - 20)
+      const y = Math.max(wa.y, wa.y + wa.height - H - 20)
+      mainWindow.setMinimumSize(300, 96)
+      mainWindow.setResizable(true)               // 必须先可调整，setBounds 才生效（Win 坑）
+      mainWindow.setBounds({ x, y, width: W, height: H })
+      mainWindow.setResizable(false)
+      mainWindow.setAlwaysOnTop(true, 'floating')
+      mainWindow.show(); mainWindow.focus()
+      dlog('[mini] ON →', JSON.stringify(mainWindow.getBounds()))
+    } else {
+      mainWindow.setAlwaysOnTop(false)
+      mainWindow.setResizable(true)
+      mainWindow.setMinimumSize(960, 660)
+      if (prevBounds) mainWindow.setBounds(prevBounds)
+      else mainWindow.setSize(1280, 820)
+      mainWindow.show(); mainWindow.focus()
+      dlog('[mini] OFF →', JSON.stringify(mainWindow.getBounds()))
+    }
+  } catch (e) { dlog('[mini] error', e.message) }
+})
 
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit() })
 app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow() })

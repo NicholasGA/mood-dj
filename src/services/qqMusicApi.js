@@ -16,37 +16,67 @@ const HEADERS = (cookies) => ({
   'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
 })
 
-// ── Search ────────────────────────────────────────────────────────
-export async function searchTracks(cookies, query, limit = 20) {
-  const body = {
-    comm: { ct: 19, cv: 1859, uin: getUin(cookies), format: 'json' },
-    req_1: {
-      method: 'DoSearchForQQMusicDesktop',
-      module: 'music.search.SearchCgiService',
-      param: { search_type: 0, query, page_num: 1, num_per_page: limit, grp: 1 },
-    },
-  }
-  const res = await fetch('https://u.y.qq.com/cgi-bin/musicu.fcg', {
-    method: 'POST',
-    headers: { ...HEADERS(cookies), 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  })
-  if (!res.ok) throw new Error(`QQ search ${res.status}`)
-  const data = await res.json()
-  const list = (data.req_1?.data?.body?.song?.list || []).filter(s => !s.pay?.payplay)
-  return list.map(s => ({
-    id: String(s.id),
+// QQ 歌曲对象 → 统一 track 形状（搜索/歌单通用）
+function mapSong(s) {
+  if (!s?.mid) return null
+  return {
+    id: String(s.id ?? s.mid),
     mid: s.mid,
     media_mid: s.file?.media_mid || s.mid,  // 取流文件名要用 media_mid，不是 mid
-    name: s.name,
+    name: s.name || s.songname,
     artists: (s.singer || []).map(a => ({ name: a.name })),
     album: {
       name: s.album?.name,
-      images: [{ url: `https://y.gtimg.cn/music/photo_new/T002R300x300M000${s.album?.mid}.jpg` }],
+      images: s.album?.mid ? [{ url: `https://y.gtimg.cn/music/photo_new/T002R300x300M000${s.album.mid}.jpg` }] : [],
     },
     duration_ms: (s.interval || 0) * 1000,
     uri: `qqmusic:${s.mid}`,
-  }))
+  }
+}
+
+async function musicu(cookies, req) {
+  const res = await fetch('https://u.y.qq.com/cgi-bin/musicu.fcg', {
+    method: 'POST',
+    headers: { ...HEADERS(cookies), 'Content-Type': 'application/json' },
+    // ct:19 cv:1859 才认 DoSearchForQQMusicDesktop（ct:24/cv:0 会返回空）
+    body: JSON.stringify({ comm: { ct: 19, cv: 1859, uin: getUin(cookies), format: 'json' }, req_1: req }),
+  })
+  if (!res.ok) throw new Error(`QQ ${res.status}`)
+  return (await res.json()).req_1?.data
+}
+
+// ── Search 单曲（page 随机翻页 → 拉开曲目差异）────────────────────
+export async function searchTracks(cookies, query, limit = 20, page = 1) {
+  const data = await musicu(cookies, {
+    method: 'DoSearchForQQMusicDesktop',
+    module: 'music.search.SearchCgiService',
+    param: { search_type: 0, query, page_num: page, num_per_page: limit, grp: 1 },
+  })
+  return (data?.body?.song?.list || []).map(mapSong).filter(Boolean)
+}
+
+// ── Search 歌单（参考别人的歌单）──────────────────────────────────
+export async function searchPlaylists(cookies, query, limit = 8) {
+  const data = await musicu(cookies, {
+    method: 'DoSearchForQQMusicDesktop',
+    module: 'music.search.SearchCgiService',
+    param: { search_type: 3, query, page_num: 1, num_per_page: limit, grp: 1 },
+  })
+  return (data?.body?.songlist?.list || []).map(p => ({
+    id: String(p.dissid),
+    name: p.dissname,
+    songCount: p.song_count || 0,
+  })).filter(p => p.id && p.songCount >= 5)
+}
+
+// ── 取某歌单内的歌曲 ──────────────────────────────────────────────
+export async function getPlaylistTracks(cookies, dissid, num = 50, begin = 0) {
+  const data = await musicu(cookies, {
+    module: 'music.srfDissInfo.aiDissInfo',
+    method: 'uniform_get_Dissinfo',
+    param: { disstid: Number(dissid), tag: 1, userinfo: 0, song_begin: begin, song_num: num },
+  })
+  return (data?.songlist || []).map(mapSong).filter(Boolean)
 }
 
 // ── Get playback URL via main process (has session cookies) ──────
