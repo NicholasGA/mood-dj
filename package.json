@@ -15,7 +15,7 @@
     "appId": "com.mooddj.app",
     "productName": "Mood DJ",
     "publish": [
-      { "provider": "github", "owner": "NicholasGA", "repo": "mood-dj" }
+      { "provider": "github", "owner": "NicholasGA", "repo": "mood-dj", "releaseType": "release" }
     ],
     "directories": {
       "output": "release"
