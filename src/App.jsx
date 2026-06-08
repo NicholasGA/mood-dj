@@ -10,6 +10,7 @@ import { searchTracks, getSongUrl, getLyric, searchPlaylists, getPlaylistTracks,
 import { analyzeMood, generateStory, curateTracks, interpretRequest, configureLLM, hasLLMKey, analyzeTaste } from './services/claudeDJ'
 import { localStory, localMoodConfig } from './services/djText'
 import { freshen, pushRecent } from './services/radio'
+import { keyToAction } from './services/shortcuts'
 import { extractAlbumColors } from './services/albumColor'
 
 export default function App() {
@@ -136,6 +137,24 @@ export default function App() {
       })
       .catch(() => { const l = local(); if (l) setTasteProfile(l) })   // AI 不可用(配额/网络) → 本地兜底，不持久化，下次有配额再生成真画像
   }, [favCount, qqCookies, tasteProfile])
+
+  // 全局键盘快捷键：空格 播放/暂停、→ 下一首、← 快退5s、↑↓ 音量、L 喜欢、M 静音（输入框内不拦截）
+  useEffect(() => {
+    const onKey = (e) => {
+      const a = keyToAction(e)
+      if (!a) return
+      const audio = audioRef.current
+      if (a === 'playpause') { if (audio?.src) { e.preventDefault(); audio.paused ? audio.play() : audio.pause() } }
+      else if (a === 'next') { e.preventDefault(); playNext() }
+      else if (a === 'seekback') { if (audio) audio.currentTime = Math.max(0, audio.currentTime - 5) }
+      else if (a === 'volup') { e.preventDefault(); if (audio) audio.volume = Math.min(1, audio.volume + 0.1) }
+      else if (a === 'voldown') { e.preventDefault(); if (audio) audio.volume = Math.max(0, audio.volume - 0.1) }
+      else if (a === 'like') likeCurrent()
+      else if (a === 'mute') { if (audio) audio.muted = !audio.muted }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [playNext])
 
   // 当前歌曲变化时，从封面提取主题色（失败则回退心情色）
   useEffect(() => {
