@@ -4,7 +4,7 @@ import MoodInput from './components/MoodInput'
 import NowPlaying from './components/NowPlaying'
 import Visualizer from './components/Visualizer'
 import DJAnnouncement from './components/DJAnnouncement'
-import { searchTracks, getSongUrl } from './services/qqMusicApi'
+import { searchTracks, getSongUrl, getLyric } from './services/qqMusicApi'
 import { analyzeMood, generateAnnouncement, curateTracks } from './services/claudeDJ'
 import { extractAlbumColors } from './services/albumColor'
 
@@ -19,6 +19,7 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(false)
   const [loadingTrack, setLoadingTrack] = useState(false)
   const [albumColors, setAlbumColors] = useState(null)
+  const [lyric, setLyric] = useState({ lines: [], choruses: [], hasTrans: false })
   const [error, setError] = useState('')
 
   const audioRef = useRef(new Audio())
@@ -65,6 +66,19 @@ export default function App() {
     extractAlbumColors(art)
       .then(c => { if (!cancelled) setAlbumColors(c) })
       .catch(() => { if (!cancelled) setAlbumColors(null) })
+    return () => { cancelled = true }
+  }, [currentTrack])
+
+  // 当前歌曲变化时抓取歌词
+  useEffect(() => {
+    const mid = currentTrack?.mid
+    const empty = { lines: [], choruses: [], hasTrans: false }
+    if (!mid) { setLyric(empty); return }
+    let cancelled = false
+    setLyric(empty)
+    getLyric(mid)
+      .then(l => { if (!cancelled) setLyric(l) })
+      .catch(() => { if (!cancelled) setLyric(empty) })
     return () => { cancelled = true }
   }, [currentTrack])
 
@@ -242,6 +256,8 @@ export default function App() {
           onNext={playNext}
           queueCount={queue.length}
           onTogglePlay={togglePlay}
+          lyric={lyric}
+          accent={accent}
         />
       </div>
 

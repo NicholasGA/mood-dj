@@ -185,6 +185,29 @@ ipcMain.handle('qq-get-url', async (_e, songmid, mediaMid) => {
   return null
 })
 
+// ── QQ Music 歌词（LRC，base64 解码后返回纯文本） ─────────────────
+ipcMain.handle('qq-get-lyric', async (_e, songmid) => {
+  try {
+    const body = JSON.stringify({
+      comm: { ct: 19, cv: 1859 },
+      // trans:1 才会返回翻译轨（默认不返回，即使 hasMultiTrans=true）
+      req: { module: 'music.musichallSong.PlayLyricInfo', method: 'GetPlayLyricInfo', param: { songMID: songmid, songID: 0, trans: 1, qrc: 0 } },
+    })
+    const res = await net.fetch('https://u.y.qq.com/cgi-bin/musicu.fcg', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Referer': 'https://y.qq.com/' },
+      body,
+    })
+    const json = await res.json()
+    const d = json.req?.data || {}
+    const dec = (b) => b ? Buffer.from(b, 'base64').toString('utf8') : ''
+    return { lyric: dec(d.lyric), trans: dec(d.trans) }
+  } catch (e) {
+    dlog('[lyric] error:', e.message)
+    return { lyric: '', trans: '' }
+  }
+})
+
 // ── Token / cookie persistence ─────────────────────────────────────
 const dataDir  = () => app.getPath('userData')
 const qqFile    = () => path.join(dataDir(), 'mooddj-qq.json')

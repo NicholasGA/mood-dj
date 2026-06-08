@@ -40,6 +40,10 @@ html, body, #root {
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 3px; }
 
+/* 歌词区隐藏滚动条（仍可滚动） */
+.lyrics-scroll { scrollbar-width: none; }
+.lyrics-scroll::-webkit-scrollbar { display: none; }
+
 /* Disc spin animation */
 @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 

@@ -1,22 +1,71 @@
 import { useState, useEffect, useRef } from 'react'
+import Lyrics from './Lyrics'
 
-export default function NowPlaying({ track, isPlaying, loadingTrack, audioRef, onNext, queueCount, onTogglePlay }) {
+export default function NowPlaying({ track, isPlaying, loadingTrack, audioRef, onNext, queueCount, onTogglePlay, lyric, accent = '#31c27c' }) {
   const [progress, setProgress] = useState(0)
+  const [dur, setDur] = useState(0)
   const [vol, setVol] = useState(80)
+  const barRef = useRef(null)
+  const draggingRef = useRef(false)
+
+  const lines = lyric?.lines || []
+  const choruses = lyric?.choruses || []
 
   useEffect(() => {
     if (!audioRef?.current) return
     const audio = audioRef.current
-    const update = () => {
-      if (audio.duration) setProgress(audio.currentTime / audio.duration)
-    }
+    const update = () => { if (audio.duration && !draggingRef.current) setProgress(audio.currentTime / audio.duration) }
+    const onMeta = () => setDur(audio.duration || 0)
     audio.addEventListener('timeupdate', update)
-    return () => audio.removeEventListener('timeupdate', update)
+    audio.addEventListener('durationchange', onMeta)
+    audio.addEventListener('loadedmetadata', onMeta)
+    return () => {
+      audio.removeEventListener('timeupdate', update)
+      audio.removeEventListener('durationchange', onMeta)
+      audio.removeEventListener('loadedmetadata', onMeta)
+    }
   }, [audioRef])
 
   function changeVolume(v) {
     setVol(v)
     if (audioRef?.current) audioRef.current.volume = v / 100
+  }
+
+  const ratioFromEvent = (e) => {
+    const rect = barRef.current.getBoundingClientRect()
+    return Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width))
+  }
+  const seekToRatio = (r) => {
+    const audio = audioRef?.current
+    if (audio?.duration) audio.currentTime = r * audio.duration
+  }
+  function onBarDown(e) {
+    draggingRef.current = true
+    const r = ratioFromEvent(e); setProgress(r)
+    const move = (ev) => { const rr = ratioFromEvent(ev); setProgress(rr) }
+    const up = (ev) => {
+      draggingRef.current = false
+      seekToRatio(ratioFromEvent(ev))
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('pointerup', up)
+    }
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', up)
+  }
+
+  function jumpChorus() {
+    const audio = audioRef?.current
+    if (!audio || !choruses.length) return
+    const t = audio.currentTime + 0.6
+    const next = choruses.find(c => c > t) ?? choruses[0]   // 没有更靠后的就回到第一段，循环
+    audio.currentTime = next
+    if (audio.paused) audio.play().catch(() => {})
+  }
+
+  const fmt = (s) => {
+    if (!s || !isFinite(s)) return '0:00'
+    const m = Math.floor(s / 60), ss = Math.floor(s % 60)
+    return `${m}:${ss.toString().padStart(2, '0')}`
   }
 
   const art = track?.album?.images?.[0]?.url
@@ -38,13 +87,27 @@ export default function NowPlaying({ track, isPlaying, loadingTrack, audioRef, o
         <div style={s.artist}>{artist}</div>
       </div>
 
-      <div style={s.bar}><div style={{ ...s.fill, width: `${progress * 100}%` }} /></div>
+      <div style={s.progRow}>
+        <span style={s.time}>{fmt(progress * dur)}</span>
+        <div ref={barRef} style={s.bar} onPointerDown={onBarDown}>
+          <div style={{ ...s.fill, width: `${progress * 100}%`, background: `linear-gradient(90deg, ${accent}, ${accent}cc)` }} />
+          <div style={{ ...s.knob, left: `${progress * 100}%`, background: accent }} />
+        </div>
+        <span style={s.time}>{fmt(dur)}</span>
+      </div>
 
       <div style={s.controls}>
         <button style={s.btn} onClick={onTogglePlay}>
           {isPlaying ? '⏸' : '▶'}
         </button>
         <button style={s.btn} onClick={onNext}>⏭</button>
+        {choruses.length > 0 && (
+          <button
+            style={{ ...s.chorusBtn, borderColor: `${accent}66`, color: accent }}
+            onClick={jumpChorus}
+            title="跳到下一段副歌"
+          >✦ 副歌</button>
+        )}
         <span style={s.badge}>队列 {queueCount}</span>
       </div>
 
@@ -55,6 +118,8 @@ export default function NowPlaying({ track, isPlaying, loadingTrack, audioRef, o
           className="mood-slider" style={{ flex: 1 }} />
         <span style={{ fontSize: 13 }}>🔊</span>
       </div>
+
+      {track && <Lyrics lines={lines} hasTrans={lyric?.hasTrans} audioRef={audioRef} accent={accent} />}
     </div>
   )
 }
@@ -68,9 +133,13 @@ const s = {
   info: { textAlign: 'center', width: '100%' },
   title: { fontSize: 16, fontWeight: 700, color: '#f9fafb', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 4 },
   artist: { fontSize: 13, color: '#9ca3af' },
-  bar: { width: '100%', height: 3, background: 'rgba(255,255,255,0.1)', borderRadius: 2, overflow: 'hidden' },
-  fill: { height: '100%', background: 'linear-gradient(90deg,#31c27c,#a7f3d0)', borderRadius: 2, transition: 'width .5s linear' },
-  controls: { display: 'flex', alignItems: 'center', gap: 16 },
+  progRow: { display: 'flex', alignItems: 'center', gap: 8, width: '100%' },
+  time: { fontSize: 10, color: '#6b7280', minWidth: 30, textAlign: 'center', fontVariantNumeric: 'tabular-nums' },
+  bar: { position: 'relative', flex: 1, height: 5, background: 'rgba(255,255,255,0.12)', borderRadius: 3, cursor: 'pointer', touchAction: 'none' },
+  fill: { position: 'absolute', top: 0, left: 0, height: '100%', borderRadius: 3, transition: 'width .12s linear' },
+  knob: { position: 'absolute', top: '50%', width: 11, height: 11, borderRadius: '50%', transform: 'translate(-50%,-50%)', boxShadow: '0 0 8px rgba(0,0,0,0.4)' },
+  controls: { display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', justifyContent: 'center' },
+  chorusBtn: { height: 30, padding: '0 12px', borderRadius: 16, background: 'rgba(255,255,255,0.05)', border: '1px solid', fontSize: 12, fontWeight: 600, cursor: 'pointer' },
   btn: { width: 48, height: 48, borderRadius: '50%', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.15)', color: '#fff', fontSize: 20, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' },
   badge: { fontSize: 12, color: '#6b7280', background: 'rgba(255,255,255,0.06)', padding: '4px 10px', borderRadius: 20 },
   volRow: { display: 'flex', alignItems: 'center', gap: 8, width: '100%' },
