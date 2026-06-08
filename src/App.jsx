@@ -11,6 +11,7 @@ import { analyzeMood, generateStory, curateTracks, interpretRequest, configureLL
 import { localStory, localMoodConfig } from './services/djText'
 import { freshen, pushRecent } from './services/radio'
 import { keyToAction } from './services/shortcuts'
+import { remainingLabel, sleepVolume, nextDuration } from './services/sleepTimer'
 import { extractAlbumColors } from './services/albumColor'
 
 export default function App() {
@@ -29,6 +30,10 @@ export default function App() {
   const [favCount, setFavCount] = useState(0)   // 已接入的 QQ收藏数（仅用于 UI 提示）
   const [likedCount, setLikedCount] = useState(0)   // 本地喜欢数量（喂口味，不再单独展示面板）
   const [tasteProfile, setTasteProfile] = useState(null)   // AI 音乐画像，无感呈现在主界面
+  const [sleepMin, setSleepMin] = useState(0)   // 睡眠定时（分钟，0=关）
+  const [sleepLeft, setSleepLeft] = useState('')   // 剩余 mm:ss
+  const sleepEndRef = useRef(0)
+  const sleepBaseVolRef = useRef(1)
   const [llmReady, setLlmReady] = useState(hasLLMKey())  // 是否已配置 AI key
   const [showSetup, setShowSetup] = useState(false)      // 手动重开设置/引导
   const [toast, setToast] = useState('')
@@ -155,6 +160,33 @@ export default function App() {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [playNext])
+
+  // 睡眠定时：循环 关→15→30→60 分钟；到点前 15s 渐降音量、到点暂停并恢复音量
+  function cycleSleep() {
+    const next = nextDuration(sleepMin)
+    setSleepMin(next)
+    if (!next) { sleepEndRef.current = 0; setSleepLeft(''); showToast('已关闭睡眠定时') }
+    else {
+      sleepEndRef.current = Date.now() + next * 60000
+      sleepBaseVolRef.current = audioRef.current?.volume ?? 1
+      showToast(`😴 ${next} 分钟后淡出停止`)
+    }
+  }
+  useEffect(() => {
+    if (!sleepMin) { setSleepLeft(''); return }
+    const id = setInterval(() => {
+      const remaining = sleepEndRef.current - Date.now()
+      const audio = audioRef.current
+      if (remaining <= 0) {
+        if (audio) { audio.pause(); audio.volume = sleepBaseVolRef.current }
+        clearInterval(id); setSleepMin(0); setSleepLeft(''); showToast('😴 睡眠定时到，已暂停')
+        return
+      }
+      if (audio) audio.volume = sleepVolume(remaining, sleepBaseVolRef.current, 15000)
+      setSleepLeft(remainingLabel(remaining))
+    }, 1000)
+    return () => clearInterval(id)
+  }, [sleepMin])
 
   // 当前歌曲变化时，从封面提取主题色（失败则回退心情色）
   useEffect(() => {
@@ -650,6 +682,14 @@ export default function App() {
         {favCount > 0 && <span style={styles.favTag} title="已接入你的 QQ音乐收藏；❤️ 的歌会同步到这里，推荐与画像都参考它"><Icon name="heart" size={11} color="#f9a8d4" filled /> QQ收藏 {favCount}</span>}
         <div style={styles.winCtrl}>
           <span style={styles.user} onClick={logout} title="退出登录">QQ音乐 ✕</span>
+          <button
+            style={{ ...styles.wBtn, ...(sleepMin ? { width: 'auto', padding: '0 7px', gap: 3, color: accent } : {}), display: 'inline-flex', alignItems: 'center' }}
+            onClick={cycleSleep}
+            title="睡眠定时（关→15→30→60 分钟，到点淡出暂停）"
+          >
+            <Icon name="moon" size={14} color={sleepMin ? accent : '#9ca3af'} />
+            {sleepMin ? <span style={{ fontSize: 10 }}>{sleepLeft || `${sleepMin}m`}</span> : null}
+          </button>
           <button style={styles.wBtn} onClick={() => setShowSetup(true)} title="设置 / API Key"><Icon name="settings" size={15} color="#9ca3af" /></button>
           <button style={styles.wBtn} onClick={() => toggleMini(true)} title="迷你播放器（置顶小窗）"><Icon name="maximize" size={13} color="#9ca3af" /></button>
           <button style={styles.wBtn} onClick={() => window.electronAPI.minimize()}>—</button>
