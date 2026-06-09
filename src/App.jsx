@@ -38,6 +38,7 @@ export default function App() {
   const [dockMode, setDockMode] = useState(false)        // 壁龛模式：可拖动的悬浮唱片球
   const [dockExpanded, setDockExpanded] = useState(false)
   const [favCount, setFavCount] = useState(0)   // 已接入的 QQ收藏数（仅用于 UI 提示）
+  const [favPlaylists, setFavPlaylists] = useState([])   // 我的歌单（我喜欢 + 自建 + 收藏的）供"找歌·我的收藏"浏览
   const [likedCount, setLikedCount] = useState(0)   // 本地喜欢数量（喂口味，不再单独展示面板）
   const [tasteProfile, setTasteProfile] = useState(null)   // AI 音乐画像，无感呈现在主界面
   const [showQueue, setShowQueue] = useState(false)   // 播放队列面板
@@ -173,6 +174,7 @@ export default function App() {
       if (f && (f.sample?.length || f.playlistIds?.length)) {
         favRef.current = f
         setFavCount(f.favCount || f.sample?.length || 0)
+        setFavPlaylists(f.playlists || [])
       }
     }).catch(() => {})
   }, [])
@@ -298,13 +300,8 @@ export default function App() {
   function playSearched(track) { if (!track?.mid) return; queueRef.current = [track, ...queueRef.current]; setQueue(queueRef.current); setShowSearch(false); playNext() }
   function queueSearched(track) { if (!track?.mid) return; queueRef.current = [...queueRef.current, track]; setQueue(queueRef.current); showToast(`已加入队列：${track.name}`) }
   function playList(tracks) { if (!tracks?.length) return; queueRef.current = tracks.filter(t => t?.mid); setQueue(queueRef.current); setShowSearch(false); playNext() }
-  // 读取「我的收藏」整张「我喜欢」歌单（兜底用个性化样本）
-  async function loadFavorites() {
-    const f = favRef.current
-    const pid = f?.playlistIds?.[0]
-    if (pid) { try { const ts = await getPlaylistTracks(qqCookiesRef.current, pid, 100); if (ts?.length) return ts } catch {} }
-    return f?.sample || []
-  }
+  // 读取某个歌单（我喜欢 / 自建 / 收藏的）的歌
+  function loadPlaylist(id) { return getPlaylistTracks(qqCookiesRef.current, id, 100) }
 
   // 把一批歌导出成一个新 QQ 歌单（签名版接口）
   async function exportToQQ(tracks, label) {
@@ -1024,9 +1021,9 @@ export default function App() {
       {showSearch && (
         <SongSearch
           accent={accent}
-          favCount={favCount}
+          playlists={favPlaylists}
           onSearch={(query) => searchTracks(qqCookiesRef.current, query, 20)}
-          onLoadFavorites={loadFavorites}
+          onLoadPlaylist={loadPlaylist}
           onPlay={playSearched}
           onQueue={queueSearched}
           onPlayList={playList}

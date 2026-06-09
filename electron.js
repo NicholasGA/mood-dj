@@ -342,6 +342,18 @@ ipcMain.handle('qq-get-favorites', async () => {
     disslist.sort((a, b) => (b.diss_name === '我喜欢') - (a.diss_name === '我喜欢') || (b.song_cnt - a.song_cnt))
     const playlistIds = disslist.slice(0, 5).map(d => String(d.tid))
     const fav = disslist.find(d => d.diss_name === '我喜欢') || disslist[0]
+    const created = disslist.map(d => ({ id: String(d.tid), name: d.diss_name, count: d.song_cnt, cover: d.diss_cover || '' }))
+
+    // 收藏的歌单（别人做的、我收藏的）——另一个接口，best-effort，拿不到也不影响自建歌单
+    let collected = []
+    try {
+      const colUrl = `https://c.y.qq.com/fav/fcgi-bin/fcg_get_profile_order_asset.fcg?ct=20&cid=205360956&userid=${uin}&reqtype=3&sin=0&ein=40&g_tk=${g_tk}&format=json&inCharset=utf8&outCharset=utf-8&notice=0&platform=yqq&needNewCode=0`
+      const cj = await (await net.fetch(colUrl, { headers })).json()
+      collected = (cj.data?.cdlist || []).filter(d => d.dissid && d.songnum > 0)
+        .map(d => ({ id: String(d.dissid), name: d.dissname, count: d.songnum, cover: d.logo || '' }))
+    } catch (e) { dlog('[fav] 收藏歌单取不到', e.message) }
+    const seenPl = new Set(); const playlists = []
+    for (const p of [...created, ...collected]) { if (p.id && !seenPl.has(p.id)) { seenPl.add(p.id); playlists.push(p) } }
 
     // 2) 从"我喜欢"随机抽一段做口味样本
     const begin = Math.max(0, Math.floor(Math.random() * Math.max(1, fav.song_cnt - 80)))
@@ -359,8 +371,8 @@ ipcMain.handle('qq-get-favorites', async () => {
     }))
     const af = {}; sample.forEach(t => t.artists.forEach(a => { af[a.name] = (af[a.name] || 0) + 1 }))
     const topArtists = Object.entries(af).sort((a, b) => b[1] - a[1]).slice(0, 12).map(([n]) => n)
-    dlog('[fav] 歌单', playlistIds.length, '| 我喜欢', fav.song_cnt, '首 | 样本', sample.length, '| 高频', topArtists.slice(0, 5).join(','))
-    return { playlistIds, topArtists, sample, favCount: fav.song_cnt }
+    dlog('[fav] 歌单', playlists.length, '(自建', created.length, '+收藏', collected.length, ') | 我喜欢', fav.song_cnt, '首 | 样本', sample.length)
+    return { playlists, playlistIds, topArtists, sample, favCount: fav.song_cnt }
   } catch (e) { dlog('[fav] error', e.message); return null }
 })
 
