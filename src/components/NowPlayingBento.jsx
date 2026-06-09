@@ -113,10 +113,10 @@ export default function NowPlayingBento({
         {/* 左栏：播放器 + 律动/心情 + 接下来 */}
         <div style={s.left}>
           {/* 正在播放（左栏顶，封面更大；accent 辉光晕进背景） */}
-          <div style={{ ...heroSurf, ...s.hero, boxShadow: `${heroSurf.boxShadow}, 0 20px 70px -20px color-mix(in srgb, ${accent} 50%, transparent)` }}>
+          <div key={track?.mid || title} className="song-pop pulse-glow" style={{ ...heroSurf, ...s.hero, boxShadow: `${heroSurf.boxShadow}, 0 20px 70px -20px color-mix(in srgb, ${accent} 50%, transparent), 0 0 calc(var(--pulse,0) * 60px) -12px color-mix(in srgb, ${accent} 80%, transparent)` }}>
             <div style={s.heroArtWrap} className={isPlaying ? 'floaty' : ''}>
-              {art ? <img src={art} alt="" style={s.heroArt} draggable={false} />
-                   : <div style={{ ...s.heroArt, ...s.ph }}>🎵</div>}
+              {art ? <img src={art} alt="" style={s.heroArt} className="pulse-art" draggable={false} />
+                   : <div style={{ ...s.heroArt, ...s.ph }} className="pulse-art">🎵</div>}
             </div>
             <div style={s.heroMid}>
               <div style={s.heroTitle} title={title}>{title}</div>
@@ -135,7 +135,7 @@ export default function NowPlayingBento({
                 <span style={{ ...s.time, color: 'rgba(255,255,255,0.85)' }} className="led">{fmt(effDur)}</span>
               </div>
               <div style={s.heroCtrl}>
-                <button style={s.playBtn} onClick={onTogglePlay} title="播放/暂停"><Icon name={isPlaying ? 'pause' : 'play'} size={22} color={accent} filled /></button>
+                <button style={{ ...s.playBtn, boxShadow: `${s.playBtn.boxShadow}, 0 0 calc(var(--pulse,0) * 30px) color-mix(in srgb, ${accent} 85%, transparent)` }} onClick={onTogglePlay} title="播放/暂停"><Icon name={isPlaying ? 'pause' : 'play'} size={22} color={accent} filled /></button>
                 <button style={s.nextBtn} onClick={onNext} title="下一首"><Icon name="next" size={17} color="#fff" filled /></button>
               </div>
             </div>

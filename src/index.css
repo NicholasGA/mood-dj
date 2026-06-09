@@ -3,6 +3,7 @@
 :root {
   --accent: #7c3aed;
   --accent2: #4f46e5;
+  --pulse: 0;            /* 全局心跳：由 Visualizer 按实时低频/鼓点写入(0..1)，前景统一跟拍 */
 }
 
 html, body, #root {
@@ -127,6 +128,14 @@ input:focus, textarea:focus {
 }
 .breathe { animation: breathe var(--breath, 7s) cubic-bezier(.45,0,.55,1) infinite; }
 
+/* 心跳消费者：跟着 --pulse(实时低频)缩放/发光，让"正在播放"像活的。
+   只用 transform/box-shadow，不碰文字所在层 → 不糊字；暂停时 --pulse→0 自然停。
+   .pulse-art 上一层若有 .floaty(平移)，两者分属不同元素故不冲突。 */
+.pulse-art { transform: scale(calc(1 + var(--pulse, 0) * 0.024)); transition: transform .08s ease-out; will-change: transform; }
+.pulse-glow { transition: box-shadow .08s ease-out; }
+@keyframes songPop { from { opacity: .35; transform: scale(.965); } to { opacity: 1; transform: scale(1); } }
+.song-pop { animation: songPop .42s cubic-bezier(.22,.61,.36,1) both; }
+
 /* 氛围光晕缓慢漂移，让背景"活着"而不是静止 */
 @keyframes drift {
   0%   { transform: translate3d(0,0,0) scale(1.05); }
@@ -135,7 +144,8 @@ input:focus, textarea:focus {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .breathe, .floaty { animation: none !important; }
+  .breathe, .floaty, .song-pop { animation: none !important; }
+  .pulse-art { transform: none !important; }
   *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; }
 }
 

@@ -93,6 +93,11 @@ export default function Visualizer({ moodConfig, isPlaying, analyser, track }) {
     window.addEventListener('resize', resize)
 
     // 三段频谱：低频(鼓点,重)/中频(人声器乐)/高频(镲片,亮)，各自独立平滑
+    // 全局心跳：把实时低频/鼓点写成 --pulse(0..1)，让前景统一跟着音乐呼吸。
+    // 节流到每 2 帧；尊重「减少动态效果」；暂停时 intensity→0 自然归静。
+    let pulseFrame = 0
+    const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches
+
     function sampleAudio() {
       const s = stateRef.current
       const an = s.analyser?.current
@@ -141,6 +146,12 @@ export default function Visualizer({ moodConfig, isPlaying, analyser, track }) {
       if (dB > 0.05) s.kick = Math.min(1.4, s.kick + dB * 3.2)
       s.kick *= 0.88
       const kick = s.kick * I
+
+      // 写心跳：低频铺底 + 鼓点冲击，整体乘以强度（暂停时趋零）
+      if (!reduceMotion && (pulseFrame = (pulseFrame + 1) % 2) === 0) {
+        const pulse = Math.min(1, (bass * 0.55 + kick * 0.85) * (0.4 + I * 0.6))
+        document.documentElement.style.setProperty('--pulse', pulse.toFixed(3))
+      }
 
       // 旋转速度受中频调制 → 不同歌曲律动节奏不同
       s.rotation += V.rot * (1 + mid * 2.4) * (0.3 + I)
@@ -238,6 +249,7 @@ export default function Visualizer({ moodConfig, isPlaying, analyser, track }) {
     return () => {
       cancelAnimationFrame(frameRef.current)
       window.removeEventListener('resize', resize)
+      document.documentElement.style.setProperty('--pulse', '0')  // 卸载时归静，避免残留心跳
     }
   }, [])
 
