@@ -342,6 +342,7 @@ function MoodGauge({ label, v, accent, onCommit }) {
       {editing ? (
         <input
           autoFocus
+          className="led num-input"
           inputMode="numeric"
           value={editVal}
           onChange={e => setEditVal(e.target.value.replace(/[^0-9]/g, '').slice(0, 3))}
@@ -351,7 +352,7 @@ function MoodGauge({ label, v, accent, onCommit }) {
             else if (e.key === 'Escape') { cancelRef.current = true; e.target.blur() }
           }}
           onBlur={() => { if (cancelRef.current) { cancelRef.current = false; setEditing(false) } else commitEdit() }}
-          style={{ ...s.gValInput, borderColor: accent, boxShadow: `0 0 0 3px color-mix(in srgb, ${accent} 24%, transparent), 0 0 12px color-mix(in srgb, ${accent} 40%, transparent)` }}
+          style={s.gValInput}
         />
       ) : (
         <span
@@ -415,7 +416,7 @@ const s = {
   gFill: { position: 'absolute', top: 0, left: 0, height: '100%', borderRadius: 5, transition: 'width .4s cubic-bezier(.22,.61,.36,1), box-shadow .16s ease' },
   gDot: { position: 'absolute', top: '50%', width: 11, height: 11, borderRadius: '50%', transform: 'translate(-50%,-50%)', background: '#fff', transition: 'left .4s cubic-bezier(.22,.61,.36,1), width .16s ease, height .16s ease, box-shadow .16s ease' },
   gVal: { fontSize: 14, color: '#fff', minWidth: 34, textAlign: 'center', flexShrink: 0, padding: '2px 4px', borderRadius: 7, transition: 'background .15s ease, box-shadow .15s ease' },
-  gValInput: { width: 34, fontSize: 13, fontWeight: 700, color: '#fff', textAlign: 'center', flexShrink: 0, background: 'rgba(0,0,0,0.45)', border: '1px solid', borderRadius: 7, outline: 'none', padding: '2px 0', appearance: 'none', transition: 'box-shadow .15s ease' },
+  gValInput: { width: 34, minWidth: 34, fontSize: 14, color: '#fff', textAlign: 'center', flexShrink: 0, padding: '2px 0' },
 
   ph2: { background: 'rgba(255,255,255,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 },
   upHead: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
