@@ -866,7 +866,12 @@ export default function App() {
 
   return (
     <div style={{ '--accent': accent, '--accent2': accent2, '--breath': breath, ...styles.shell, padding: maximized ? 0 : 22 }}>
-    <div style={{ ...styles.root, borderRadius: maximized ? 0 : 20, border: maximized ? 'none' : '1px solid rgba(255,255,255,0.05)', boxShadow: maximized ? 'none' : 'inset 0 1px 0 rgba(255,255,255,0.13), 0 7px 24px -10px rgba(0,0,0,0.5)' }}>
+    <div style={{ ...styles.root,
+      // 最大化：背景转不透明铺满（否则透明窗四周透出桌面=一圈空白）；窗口模式保留半透明"无形感"
+      background: maximized
+        ? 'radial-gradient(130% 90% at 50% -14%, color-mix(in srgb, var(--accent) 30%, transparent) 0%, transparent 54%), radial-gradient(120% 70% at 50% 116%, color-mix(in srgb, var(--accent2) 22%, transparent) 0%, transparent 50%), linear-gradient(180deg, #0c0c14 0%, #06060b 100%)'
+        : styles.root.background,
+      borderRadius: maximized ? 0 : 20, border: maximized ? 'none' : '1px solid rgba(255,255,255,0.05)', boxShadow: maximized ? 'none' : 'inset 0 1px 0 rgba(255,255,255,0.13), 0 7px 24px -10px rgba(0,0,0,0.5)' }}>
       {ambientArt && <img src={ambientArt} alt="" aria-hidden style={styles.ambient} key={ambientArt} />}
       {ambientArt && <div style={styles.ambientVeil} aria-hidden />}
       <div style={styles.titleBar}>

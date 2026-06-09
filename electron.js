@@ -81,10 +81,6 @@ function createWindow() {
     }
   })
 
-  // 最大化/还原通知前台：最大化时去掉窗口圆角（否则四角露出桌面）
-  const sendWinState = () => { try { mainWindow.webContents.send('win-state', { maximized: mainWindow.isMaximized() }) } catch {} }
-  mainWindow.on('maximize', sendWinState)
-  mainWindow.on('unmaximize', sendWinState)
 }
 
 // ── 系统托盘：后台存在感（窗口收起仍在放，托盘可控+可唤回）──────────────
@@ -489,7 +485,15 @@ ipcMain.handle('open-external', (_e, url) => {
 
 // ── Window controls ───────────────────────────────────────────────
 ipcMain.on('win-minimize', () => mainWindow.minimize())
-ipcMain.on('win-maximize', () => mainWindow.isMaximized() ? mainWindow.unmaximize() : mainWindow.maximize())
+// □ 按钮 = 最大化/还原。无边框透明窗的 isMaximized()/'maximize' 事件不可靠 → 自己记 winMax 并显式回报。
+// 前端据此把背景转不透明铺满（否则透明窗四周透出桌面=一圈空白）。
+let winMax = false
+ipcMain.on('win-maximize', () => {
+  if (!mainWindow) return
+  winMax = !winMax
+  winMax ? mainWindow.maximize() : mainWindow.unmaximize()
+  try { mainWindow.webContents.send('win-state', { maximized: winMax }) } catch {}
+})
 ipcMain.on('win-close',    () => mainWindow.close())
 
 // 透明窗 Windows 坑：从小尺寸(迷你/壁龛)放大还原后，新增区域常不重绘 → 整窗透明=隐形。

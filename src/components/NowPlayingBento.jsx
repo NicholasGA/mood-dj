@@ -24,10 +24,12 @@ function MiniWave({ analyser, color, isPlaying }) {
       const w = canvas.width = canvas.clientWidth * 2
       const h = canvas.height = canvas.clientHeight * 2
       ctx.clearRect(0, 0, w, h)
+      if (w < 8 || h < 4) return   // 画布还没布局好/极小（如还原瞬间）：跳过本帧，否则 roundRect 负半径会崩溃整块
       const an = analyser?.current
       let live = false
       if (an && isPlaying) { an.getByteFrequencyData(buf); live = true }
       const bw = w / N
+      const barW = Math.max(1, bw - 3)        // 夹到 ≥1，避免负宽/负半径
       for (let i = 0; i < N; i++) {
         const v = live
           ? Math.pow(buf[Math.floor((i / N) * an.frequencyBinCount * 0.55)] / 255, 1.1)
@@ -36,9 +38,9 @@ function MiniWave({ analyser, color, isPlaying }) {
         ctx.fillStyle = color
         ctx.globalAlpha = 0.45 + v * 0.55
         const x = i * bw + 1.5
-        const r = Math.min((bw - 3) / 2, 3)
+        const r = Math.max(0, Math.min(barW / 2, 3))
         ctx.beginPath()
-        ctx.roundRect(x, h - bh, bw - 3, bh, r)
+        ctx.roundRect(x, h - bh, barW, bh, r)
         ctx.fill()
       }
     }
@@ -88,7 +90,8 @@ export default function NowPlayingBento({
     const up = (ev) => {
       const r = ratioFromEvent(ev)
       const audio = audioRef?.current
-      if (audio && effDur > 0) audio.currentTime = r * effDur
+      // 立即把 cur 同步到松手位置，再清 dragRatio → ratio 不会先弹回旧 cur 再跳到新位置（圆点闪现）
+      if (audio && effDur > 0) { audio.currentTime = r * effDur; setCur(r * effDur) }
       setDragRatio(null)
       window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up)
     }
@@ -134,8 +137,8 @@ export default function NowPlayingBento({
               <div style={s.progRow}>
                 <span style={{ ...s.time, ...s.timeBig, color: '#fff' }} className="led">{fmt(ratio * effDur)}</span>
                 <div ref={barRef} style={s.bar} onPointerDown={onBarDown}>
-                  <div style={{ ...s.fill, width: `${ratio * 100}%` }} />
-                  <div style={{ ...s.knob, left: `${ratio * 100}%` }} />
+                  <div style={{ ...s.fill, width: `${ratio * 100}%`, transition: dragRatio != null ? 'none' : s.fill.transition }} />
+                  <div style={{ ...s.knob, left: `${ratio * 100}%`, transition: dragRatio != null ? 'none' : undefined }} />
                 </div>
                 <span style={{ ...s.time, color: 'rgba(255,255,255,0.85)' }} className="led">{fmt(effDur)}</span>
               </div>
