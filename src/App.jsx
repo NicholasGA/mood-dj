@@ -6,6 +6,7 @@ import Visualizer from './components/Visualizer'
 import DJAnnouncement from './components/DJAnnouncement'
 import MiniPlayer from './components/MiniPlayer'
 import NicheDock from './components/NicheDock'
+import BentoStats from './components/BentoStats'
 import Icon from './components/Icon'
 import { searchTracks, getSongUrl, getLyric, searchPlaylists, getPlaylistTracks, searchByArtist } from './services/qqMusicApi'
 import { analyzeMood, generateStory, curateTracks, interpretRequest, configureLLM, hasLLMKey, analyzeTaste, generatePersona, configurePersona, getPersona } from './services/claudeDJ'
@@ -831,25 +832,36 @@ export default function App() {
       )}
 
       <div style={styles.content}>
-        <MoodInput onStart={startRadio} isLoading={isLoading} isActive={!!currentTrack} moodConfig={moodConfig} taste={tasteProfile} />
-        <NowPlaying
-          track={currentTrack}
-          isPlaying={isPlaying}
-          loadingTrack={loadingTrack}
-          audioRef={audioRef}
-          onNext={playNext}
-          queueCount={queue.length}
-          onTogglePlay={togglePlay}
-          lyric={lyric}
-          accent={accent}
-          onVibe={adjustVibe}
-          onDislike={dislikeCurrent}
-          onSteer={steerRadio}
-          onLike={likeCurrent}
-          onOpenQueue={() => setShowQueue(true)}
-          volume={volume}
-          onVolume={setUserVolume}
-        />
+        <div style={styles.cardRow}>
+          <MoodInput onStart={startRadio} isLoading={isLoading} isActive={!!currentTrack} moodConfig={moodConfig} taste={tasteProfile} />
+          <NowPlaying
+            track={currentTrack}
+            isPlaying={isPlaying}
+            loadingTrack={loadingTrack}
+            audioRef={audioRef}
+            onNext={playNext}
+            queueCount={queue.length}
+            onTogglePlay={togglePlay}
+            lyric={lyric}
+            accent={accent}
+            onVibe={adjustVibe}
+            onDislike={dislikeCurrent}
+            onSteer={steerRadio}
+            onLike={likeCurrent}
+            onOpenQueue={() => setShowQueue(true)}
+            volume={volume}
+            onVolume={setUserVolume}
+          />
+        </div>
+        {currentTrack && (
+          <BentoStats
+            accent={accent}
+            energy={moodConfig?.energy ?? 0.5}
+            queue={queue.length}
+            listened={(memoryRef.current.history || []).length}
+            mood={moodConfig?.mood_name}
+          />
+        )}
       </div>
 
       <DJAnnouncement text={announcement} visible={showAnnouncement} speak={djSpeak} onDuck={duckForSpeech} />
@@ -889,7 +901,8 @@ const styles = {
   user: { fontSize: 12, color: '#6b7280', marginRight: 8, cursor: 'pointer' },
   wBtn: { width: 28, height: 22, background: 'rgba(255,255,255,0.07)', border: 'none', color: '#9ca3af', fontSize: 11, cursor: 'pointer', borderRadius: 4, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' },
   errBanner: { position: 'fixed', top: 44, left: '50%', transform: 'translateX(-50%)', background: 'rgba(60,16,16,0.92)', border: '1px solid rgba(239,68,68,0.3)', color: '#fca5a5', fontSize: 13, padding: '8px 20px', borderRadius: 8, zIndex: 200, cursor: 'pointer', whiteSpace: 'nowrap' },
-  content: { flex: 1, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, padding: 24, alignItems: 'start', position: 'relative', zIndex: 10, overflowY: 'auto' },
+  content: { flex: 1, display: 'flex', flexDirection: 'column', gap: 16, padding: 24, position: 'relative', zIndex: 10, overflowY: 'auto' },
+  cardRow: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, alignItems: 'start' },
   toast: { position: 'fixed', bottom: 96, left: '50%', transform: 'translate(-50%,8px)', background: 'rgba(12,12,16,0.94)', border: '1px solid rgba(255,255,255,0.12)', color: '#f9fafb', fontSize: 13, padding: '8px 18px', borderRadius: 20, zIndex: 300, pointerEvents: 'none', transition: 'opacity .25s, transform .25s' },
   updateBanner: { position: 'fixed', top: 48, left: '50%', transform: 'translateX(-50%)', background: 'rgba(12,12,16,0.95)', border: '1px solid', color: '#f9fafb', fontSize: 13, padding: '8px 16px', borderRadius: 10, zIndex: 250, display: 'flex', alignItems: 'center', gap: 10, whiteSpace: 'nowrap' },
   updateBtn: { padding: '5px 12px', borderRadius: 8, border: 'none', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer' },
