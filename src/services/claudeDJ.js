@@ -169,47 +169,59 @@ export async function analyzeMood(text, energy, valence, platform = 'qq') {
   return cfg
 }
 
-// 本地意图解析（不依赖 AI，Gemini 挂了/限流也能用）：剥掉指令词，拆出歌手与心情
+// 本地意图解析（不依赖 AI）：识别意图 mode（探索/收藏/普通）+ 剥指令/意图词 + 拆歌手与心情
 export function localInterpret(text) {
-  let s = (text || '').trim()
-  s = s.replace(/^(请|帮我|给我|我想听|我要听|我想|我要|想听|来听|放点|来点|听点|放首|来首|来个|换成|换点|整点|放|听|想|要)+/g, '')
-  s = s.replace(/(的歌曲?|的音乐|的曲子?|的|吧|嘛|啊|呗|哦|喔|呀)+$/g, '').trim()
-  // 拆 "歌手 + 但/还要/要 + 心情"
+  const raw = (text || '').trim()
+  const discover = /没听过|沒聽過|没听|沒聽|新鲜|新鮮|探索|发现|發現|冷门|冷門|小众|小衆|没收藏|沒收藏|宝藏|寶藏|换换口味|不一样|不一樣|陌生|生面孔|新歌手/.test(raw)
+  const favorite = !discover && /(我|自己)的?(收藏|喜欢|喜歡|爱听|愛聽)|收藏(里|裡|夹|夾)|我的歌单|(听过|聽過)的/.test(raw)
+  // 剥掉 meta 意图词，避免被当成关键词/歌手去搜（"我没听过"绝不该进搜索）
+  const stripMeta = (x) => (x || '').replace(/(我|自己|一些|一点|点儿?|些|首|那种|那些|这种|没听过的?|沒聽過的?|没听|沒聽|新鲜的?|新鮮的?|探索|发现|發現|冷门的?|冷門的?|小众的?|小衆的?|宝藏|寶藏|换换口味|不一样的?|不一樣的?|陌生的?|随便|隨便|收藏(里|裡)?的?|喜欢的?|喜歡的?|爱听的?|愛聽的?|听过的?|聽過的?)/g, '').trim()
+  let s = raw
+    .replace(/^(请|帮我|给我|我想听|我要听|我想|我要|想听|来听|放点|来点|听点|放首|来首|来个|换成|换点|整点|放|听|想|要)+/g, '')
+    .replace(/(的歌曲?|的音乐|的曲子?|的|吧|嘛|啊|呗|哦|喔|呀)+$/g, '').trim()
   let artist = s, mood = ''
   const conj = s.match(/^(.+?)(但是?|不过|还要|要|换成)\s*(.+)$/)
   if (conj) { artist = conj[1].trim(); mood = conj[3] }
-  artist = artist.replace(/(的|点)+$/g, '').trim()
-  mood = (mood || '').replace(/(的|点)+$/g, '').trim()
+  artist = stripMeta(artist.replace(/(的|点)+$/g, '').trim())
+  mood = stripMeta((mood || '').replace(/(的|点)+$/g, '').trim())
   const artists = (artist && artist.length <= 10 && !/[，,\s]/.test(artist)) ? [artist] : []
-  const keywords = (mood ? [mood] : (artist ? [artist] : [text])).filter(Boolean)
-  return { artists, keywords, mood_name: (artist || text).slice(0, 6), dj_intro: '好嘞，换个味道~' }
+  let keywords = (mood ? [mood] : (artist ? [artist] : [])).filter(Boolean)
+  if (!keywords.length) keywords = discover ? ['小众 华语', '宝藏 冷门', '好听 新发现'] : (favorite || !raw) ? [] : [raw]
+  const mode = discover ? 'discover' : favorite ? 'favorite' : 'normal'
+  const dj_intro = discover ? '行，挖几首你没听过的~' : favorite ? '回你的收藏里转转~' : '好嘞，换个味道~'
+  return { mode, artists, keywords, mood_name: (artist || mood || (discover ? '探索新歌' : favorite ? '我的收藏' : raw)).slice(0, 6) || '点歌', dj_intro }
 }
 
-// 解析对话点歌请求 → 歌手 / 关键词 / 心情（AI 优先，失败回退本地解析）
-export async function interpretRequest(text) {
+// 解析对话点歌请求 → 意图 mode / 歌手 / 关键词 / 心情（AI 优先，失败回退本地解析）。
+// taste: { genres, artists } 给 AI 当探索方向的参考。
+export async function interpretRequest(text, taste = {}) {
+  const tasteHint = (taste.genres?.length || taste.artists?.length)
+    ? `\n听众口味：曲风[${(taste.genres || []).slice(0, 4).join('、')}] 常听[${(taste.artists || []).slice(0, 5).join('、')}]。探索意图时据此延伸到相邻但新鲜的方向。` : ''
   try {
-    const system = withPersona(`你解析用户的点歌/换歌请求，只输出JSON，不要解释。其中 dj_intro 用你这个 DJ 一贯的口吻回应。`)
+    const system = withPersona(`你解析用户的点歌/换歌请求，只输出JSON，不要解释。dj_intro 用你这个 DJ 一贯的口吻回应。`)
     const raw = await gemini(system, `
-用户说："${text}"
-解析其意图，返回JSON：
+用户说："${text}"${tasteHint}
+解析意图，返回JSON：
 {
-  "artists": ["用户点名的歌手原名(没有就空数组)"],
-  "keywords": ["描述曲风/心情/语种/场景的中文搜索词，2-4个，始终给(贴合请求)"],
+  "mode": "discover=想听没听过/新鲜/探索/冷门小众的；favorite=想听自己收藏/喜欢的；normal=其它",
+  "artists": ["点名的歌手原名(没有就空数组)"],
+  "keywords": ["真正能在音乐App搜到歌的曲风/场景/语种词，2-4个。绝不要把'没听过/探索/随便/我收藏的'这类意图词当关键词！discover 时给出贴合口味又能挖到新东西的方向词"],
   "mood_name": "4-6字概括",
   "dj_intro": "≤25字DJ口吻回应，呼应这句话"
-}`, { maxTokens: 400, temperature: 0.6 })
+}`, { maxTokens: 440, temperature: 0.6 })
     const m = raw.match(/\{[\s\S]*\}/)
     if (!m) throw new Error('no json')
     const j = JSON.parse(m[0])
     const local = localInterpret(text)
     return {
+      mode: ['discover', 'favorite', 'normal'].includes(j.mode) ? j.mode : local.mode,
       artists: Array.isArray(j.artists) && j.artists.length ? j.artists.filter(Boolean) : local.artists,
       keywords: Array.isArray(j.keywords) && j.keywords.length ? j.keywords.filter(Boolean) : local.keywords,
       mood_name: j.mood_name || local.mood_name,
       dj_intro: j.dj_intro || local.dj_intro,
     }
   } catch {
-    return localInterpret(text)   // 限流/失败 → 本地解析，照样能识别歌手
+    return localInterpret(text)   // 限流/失败 → 本地解析，照样能识别意图与歌手
   }
 }
 

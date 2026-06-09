@@ -35,6 +35,27 @@ describe('localInterpret（AI 不可用时的本地点歌解析）', () => {
     expect(r.artists).toEqual([])
     expect(r.keywords).toEqual([])
   })
+
+  it('"放点我没听过的" → 探索意图，绝不把"没听过"当关键词', () => {
+    const r = localInterpret('放点我没听过的')
+    expect(r.mode).toBe('discover')
+    expect(r.keywords.join('')).not.toContain('没听过')
+    expect(r.artists).toEqual([])
+  })
+
+  it('"想听点没听过的日系" → 探索 + 保留曲风关键词', () => {
+    const r = localInterpret('想听点没听过的日系')
+    expect(r.mode).toBe('discover')
+    expect(r.keywords.join('')).toContain('日系')
+  })
+
+  it('"放我收藏的歌" → 收藏意图', () => {
+    expect(localInterpret('放我收藏的歌').mode).toBe('favorite')
+  })
+
+  it('普通点歌 → mode 为 normal', () => {
+    expect(localInterpret('放点周杰伦的').mode).toBe('normal')
+  })
 })
 
 describe('configureLLM / hasLLMKey', () => {

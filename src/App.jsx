@@ -68,6 +68,7 @@ export default function App() {
   const analyserRef = useRef(null)
   const radioRef = useRef(null)        // 当前电台上下文：{ queries, playlistIds, seen }，用于无限补歌
   const replenishPromiseRef = useRef(null)   // 进行中的补歌 promise（合并并发调用，避免竞态）
+  const favMidsRef = useRef(new Set())       // favMids 的 ref 镜像（供补歌等回调读最新值）
   const favRef = useRef(null)          // 用户收藏：{ playlistIds, topArtists, sample, favCount }
   const memoryRef = useRef({ likedTracks: [], dislikedArtists: [] })   // 跨会话口味记忆
   const saveMemory = useCallback(() => { window.electronAPI.storeMemory(memoryRef.current) }, [])
@@ -138,6 +139,7 @@ export default function App() {
 
   // 窗口最大化状态（决定要不要圆角）
   useEffect(() => { window.electronAPI.onWinState?.(s => setMaximized(!!s?.maximized)) }, [])
+  useEffect(() => { favMidsRef.current = favMids }, [favMids])   // 同步给 ref，补歌回调读最新
 
   // 载入"我喜欢"全部 mid（标已收藏/新歌）。先用本地缓存，缓存缺失或超 24h 才后台重拉
   useEffect(() => {
@@ -409,7 +411,8 @@ export default function App() {
     const run = async () => {
       const fresh = []
       const disliked = (t) => ctx.disliked && (t.artists || []).some(a => ctx.disliked.has(a.name))
-      const add = (arr) => { for (const t of arr || []) if (t?.mid && !ctx.seen.has(t.mid) && !disliked(t)) { ctx.seen.add(t.mid); fresh.push(t) } }
+      // 探索电台(ctx.excludeFav)：补歌也排除已收藏，保持整台都是你没听过的
+      const add = (arr) => { for (const t of arr || []) if (t?.mid && !ctx.seen.has(t.mid) && !disliked(t) && !(ctx.excludeFav && favMidsRef.current.has(t.mid))) { ctx.seen.add(t.mid); fresh.push(t) } }
       // 1) 单曲搜索：随机翻较深页（避开第 1 页口水热门）
       await Promise.allSettled(ctx.queries.map(q =>
         searchTracks(qqCookiesRef.current, q, 15, 2 + Math.floor(Math.random() * 8)).then(add).catch(() => {})))
@@ -727,27 +730,40 @@ export default function App() {
     showToast('🎙️ 在帮你换…')
     try {
       let intent
-      try { intent = await interpretRequest(t) }
-      catch { intent = { artists: [], keywords: [t], mood_name: t.slice(0, 6) || '点歌', dj_intro: '好嘞，换个味道~' } }
+      const tasteHint = { genres: tasteProfile?.genres, artists: [...new Set([...(favRef.current?.topArtists || []), ...likedArtists()])] }
+      try { intent = await interpretRequest(t, tasteHint) }
+      catch { intent = { mode: 'normal', artists: [], keywords: [t], mood_name: t.slice(0, 6) || '点歌', dj_intro: '好嘞，换个味道~' } }
+      const discover = intent.mode === 'discover'   // 想听没听过的 → 排除我收藏过的、翻深页挖新
+      const favorite = intent.mode === 'favorite'   // 想听我收藏的 → 从我喜欢里捞
+      ctx.excludeFav = discover   // 让后续无限补歌也保持"只给没收藏过的"
       // 只改名字/回应，配色保留（不突兀）
       setMoodConfig(m => ({ ...(m || {}), mood_name: intent.mood_name, mood_emoji: m?.mood_emoji || '🎙️', dj_intro: intent.dj_intro, energy: E }))
       setAnnouncement(intent.dj_intro); setShowAnnouncement(true); setTimeout(() => setShowAnnouncement(false), 6000)
 
       const pool = []
       const disliked = (x) => ctx.disliked && (x.artists || []).some(a => ctx.disliked.has(a.name))
-      const add = (arr) => { for (const x of arr || []) if (x?.mid && !ctx.seen.has(x.mid) && !disliked(x)) { ctx.seen.add(x.mid); pool.push(x) } }
+      // 探索模式：额外排除已在「我喜欢」里的歌，真正只给你没收藏过的
+      const add = (arr) => { for (const x of arr || []) if (x?.mid && !ctx.seen.has(x.mid) && !disliked(x) && !(discover && favMids.has(x.mid))) { ctx.seen.add(x.mid); pool.push(x) } }
 
+      if (favorite) {
+        // 想听收藏的：直接把「我喜欢」样本 + 我喜欢歌单灌进来
+        if (favRef.current?.sample?.length) add(favRef.current.sample)
+        const myFav = favRef.current?.playlistIds?.[0]
+        if (myFav) { try { await getPlaylistTracks(qqCookiesRef.current, myFav, 60, Math.floor(Math.random() * 3) * 60).then(add).catch(() => {}) } catch {} }
+      }
       // 点名歌手 → 搜本人（singer 过滤），翻两页
       for (const ar of intent.artists.slice(0, 3)) {
         ;(await Promise.allSettled([1, 2].map(p => searchByArtist(qqCookiesRef.current, ar, 20, p)))).forEach(r => r.status === 'fulfilled' && add(r.value))
       }
-      // 关键词 → 曲风/心情搜索
-      ;(await Promise.allSettled((intent.keywords || []).map(q => searchTracks(qqCookiesRef.current, q, 15, 1 + Math.floor(Math.random() * 3))))).forEach(r => r.status === 'fulfilled' && add(r.value))
-      // 没点歌手时，搜歌单补充变化
-      if (!intent.artists.length) {
+      // 关键词 → 曲风/心情搜索；探索时翻更深页，避开人人都听过的口水热门
+      const kwPage = () => discover ? 3 + Math.floor(Math.random() * 8) : 1 + Math.floor(Math.random() * 3)
+      ;(await Promise.allSettled((intent.keywords || []).map(q => searchTracks(qqCookiesRef.current, q, 15, kwPage())))).forEach(r => r.status === 'fulfilled' && add(r.value))
+      // 没点歌手时，搜歌单补充变化（探索时专挑冷门/宝藏歌单）
+      if (!intent.artists.length && !favorite) {
         try {
-          const pls = await searchPlaylists(qqCookiesRef.current, intent.keywords?.[0] || t, 6)
-          const ids = pls.slice(0, 2).map(p => p.id)
+          const plQ = discover ? '小众 冷门 宝藏 私藏' : (intent.keywords?.[0] || t)
+          const pls = await searchPlaylists(qqCookiesRef.current, plQ, 8)
+          const ids = pls.slice(0, discover ? 3 : 2).map(p => p.id)
           ctx.playlistIds.push(...ids.filter(id => !ctx.playlistIds.includes(id)))
           ;(await Promise.allSettled(ids.map(id => getPlaylistTracks(qqCookiesRef.current, id, 50)))).forEach(r => r.status === 'fulfilled' && add(r.value))
         } catch {}
