@@ -41,7 +41,7 @@ export default function App() {
   const [tasteProfile, setTasteProfile] = useState(null)   // AI 音乐画像，无感呈现在主界面
   const [showQueue, setShowQueue] = useState(false)   // 播放队列面板
   const [showPicker, setShowPicker] = useState(false)   // 播放中点"换心情"→ 回到选心情
-  const [showMoodPop, setShowMoodPop] = useState(false) // 播放中点心情名 → 原地弹换心情小浮窗
+  const [moodPopAt, setMoodPopAt] = useState(null)      // 播放中点心情名 → 在点击处弹换心情小浮窗(右键菜单式)
   const [maximized, setMaximized] = useState(false)     // 最大化时去掉窗口圆角
   const [repeatOne, setRepeatOne] = useState(false)     // 单曲循环：放完重头放本首，不续下一首
   const repeatOneRef = useRef(repeatOne)                // 给 onEnded 闭包读最新值
@@ -972,7 +972,7 @@ export default function App() {
             story={memoryRef.current.songStories?.[currentTrack.mid] || localStory(currentTrack)}
             djName={getPersona()?.name} analyser={analyserRef} volume={volume} onVolume={setUserVolume}
             inFav={favMids.has(currentTrack.mid)}
-            onRepick={() => setShowMoodPop(true)}
+            onRepick={(e) => setMoodPopAt({ x: e?.clientX ?? 200, y: e?.clientY ?? 200 })}
             repeatOne={repeatOne} onToggleRepeat={() => setRepeatOne(v => !v)}
           />
         ) : (
@@ -1008,12 +1008,13 @@ export default function App() {
         />
       )}
 
-      {showMoodPop && (
+      {moodPopAt && (
         <MoodSwitcher
+          anchor={moodPopAt}
           accent={accent}
           isLoading={isLoading}
-          onClose={() => setShowMoodPop(false)}
-          onPick={(t, e, v) => { setShowMoodPop(false); startRadio(t, e, v) }}
+          onClose={() => setMoodPopAt(null)}
+          onPick={(t, e, v) => { setMoodPopAt(null); startRadio(t, e, v) }}
         />
       )}
     </div>
