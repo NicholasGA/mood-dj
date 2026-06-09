@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import Icon from './Icon'
 
 const VIEW_H = 188
+const SEEK_LEAD = 0.45   // 点歌词跳转时往前留一点(秒)，避免落在第一个字中间、第一个字听不清
 
 export default function Lyrics({ lines, audioRef, accent = '#31c27c', hasTrans, fill = false }) {
   const [idx, setIdx] = useState(-1)
@@ -84,7 +85,7 @@ export default function Lyrics({ lines, audioRef, accent = '#31c27c', hasTrans, 
                 }}
               >
                 <span
-                  onClick={() => seekTo(l.time)}
+                  onClick={() => seekTo(Math.max(0, l.time - SEEK_LEAD))}
                   onMouseEnter={() => setHoverIdx(i)}
                   onMouseLeave={() => setHoverIdx(v => (v === i ? null : v))}
                   title="点这句跳到这里"
