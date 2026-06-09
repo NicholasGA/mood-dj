@@ -485,20 +485,13 @@ ipcMain.handle('open-external', (_e, url) => {
 
 // ── Window controls ───────────────────────────────────────────────
 ipcMain.on('win-minimize', () => mainWindow.minimize())
-// □ 按钮 = 铺满工作区/还原。用 setBounds 直接设尺寸（瞬时无动画），不走 maximize() 的最大化动画
-// （无边框透明窗下那动画会"先变小再变大"抽一下）。自己记 winMax + 存还原前尺寸；前端据 winMax 把背景转不透明铺满。
+// □ 按钮 = 最大化/还原（真·系统最大化，便于"锁住"）。isMaximized()/'maximize' 事件在无边框透明窗不可靠 →
+// 自己记 winMax 显式回报；前端据此把背景转不透明铺满 + 最大化时禁掉标题栏拖拽（否则能把全屏窗拖跑）。
 let winMax = false
-let winMaxPrevBounds = null
 ipcMain.on('win-maximize', () => {
   if (!mainWindow) return
   winMax = !winMax
-  if (winMax) {
-    winMaxPrevBounds = mainWindow.getBounds()
-    mainWindow.setBounds(screen.getDisplayMatching(mainWindow.getBounds()).workArea)  // 直接铺满，不抽
-  } else if (winMaxPrevBounds) {
-    mainWindow.setBounds(winMaxPrevBounds)
-  }
-  showAndRepaint()                          // 透明窗放大不重绘 → 抖 opacity 逼重画
+  winMax ? mainWindow.maximize() : mainWindow.unmaximize()
   try { mainWindow.webContents.send('win-state', { maximized: winMax }) } catch {}
 })
 ipcMain.on('win-close',    () => mainWindow.close())

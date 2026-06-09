@@ -875,7 +875,7 @@ export default function App() {
       borderRadius: maximized ? 0 : 20, border: maximized ? 'none' : '1px solid rgba(255,255,255,0.06)', boxShadow: maximized ? 'none' : 'inset 0 1px 0 rgba(255,255,255,0.12)' }}>
       {ambientArt && <img src={ambientArt} alt="" aria-hidden style={styles.ambient} key={ambientArt} />}
       {ambientArt && <div style={styles.ambientVeil} aria-hidden />}
-      <div style={styles.titleBar}>
+      <div style={{ ...styles.titleBar, WebkitAppRegion: maximized ? 'no-drag' : 'drag' }}>
         <span style={styles.appName}><Icon name="headphones" size={17} color={accent} strokeWidth={2.2} /> Mood DJ</span>
         {moodConfig && <span style={{ ...styles.tag, background: `${accent}33`, color: accent }}>{moodConfig.mood_name}</span>}
         {favCount > 0 && <span style={styles.favTag} title="已接入你的 QQ音乐收藏；❤️ 的歌会同步到这里，推荐与画像都参考它"><Icon name="heart" size={11} color="#f9a8d4" filled /> QQ收藏 {favCount}</span>}
