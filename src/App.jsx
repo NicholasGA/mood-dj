@@ -845,7 +845,7 @@ export default function App() {
             accent={accent} accent2={accent2}
             onTogglePlay={togglePlay} onNext={playNext} onLike={likeCurrent} onDislike={dislikeCurrent}
             onVibe={adjustVibe} onSteer={steerRadio} onOpenQueue={() => setShowQueue(true)}
-            queueCount={queue.length} nextTrack={queue[0]} lyric={lyric} moodConfig={moodConfig}
+            queueCount={queue.length} nextTrack={queue[0]} upNext={queue} lyric={lyric} moodConfig={moodConfig}
             story={memoryRef.current.songStories?.[currentTrack.mid] || localStory(currentTrack)}
             djName={getPersona()?.name} analyser={analyserRef} volume={volume} onVolume={setUserVolume}
             onRepick={() => setShowPicker(true)}

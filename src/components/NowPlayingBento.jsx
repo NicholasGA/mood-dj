@@ -49,7 +49,7 @@ function MiniWave({ analyser, color, isPlaying }) {
 export default function NowPlayingBento({
   track, isPlaying, loadingTrack, audioRef, accent = '#31c27c', accent2 = '#4f46e5',
   onTogglePlay, onNext, onLike, onDislike, onVibe, onSteer, onOpenQueue,
-  queueCount = 0, nextTrack, lyric, moodConfig, story, djName, analyser, volume = 0.8, onVolume, onRepick,
+  queueCount = 0, nextTrack, upNext = [], lyric, moodConfig, story, djName, analyser, volume = 0.8, onVolume, onRepick,
 }) {
   const [progress, setProgress] = useState(0)
   const [dur, setDur] = useState(0)
@@ -146,19 +146,23 @@ export default function NowPlayingBento({
             </div>
           </div>
 
-          {/* 接下来（撑满左栏剩余高度） */}
-          <div style={{ ...vividDark(pal.next, 20), ...s.tile, flex: 1, cursor: 'pointer' }} onClick={onOpenQueue} title="查看/管理队列">
-            <div style={s.tLabel}>接下来</div>
-            <div style={s.nextRow}>
-              {nextArt ? <img src={nextArt} alt="" style={s.nextThumb} draggable={false} /> : <div style={{ ...s.nextThumb, ...s.ph2 }}>♪</div>}
-              <div style={s.nextInfo}>
-                <div style={s.nextTitle} title={nextTrack?.name}>{nextTrack?.name || '自动续上…'}</div>
-                <div style={s.nextArtist}>{nextTrack?.artists?.map(a => a.name).join(', ') || '无限电台'}</div>
-              </div>
-            </div>
-            <div style={s.dotsRow}>
-              {Array.from({ length: 9 }).map((_, i) => <span key={i} style={{ ...s.dot, opacity: i < dots ? 1 : 0.22 }} />)}
-              <span style={s.queueNum}>{queueCount}</span>
+          {/* 接下来：整条待播列表（撑满左栏剩余高度，可滚），点开管理队列 */}
+          <div style={{ ...vividDark(pal.next, 20), ...s.tile, flex: 1, overflow: 'hidden', cursor: 'pointer' }} onClick={onOpenQueue} title="查看/管理队列">
+            <div style={s.upHead}><span style={s.tLabel}>接下来</span><span style={s.upCount}>{queueCount} 首待播</span></div>
+            <div style={s.upList} className="lyrics-scroll">
+              {upNext.slice(0, 30).map((t, i) => (
+                <div key={t.mid || i} style={s.upRow}>
+                  <span style={s.upNum}>{i + 1}</span>
+                  {t.album?.images?.[0]?.url
+                    ? <img src={t.album.images[0].url} alt="" style={s.upThumb} draggable={false} />
+                    : <div style={{ ...s.upThumb, ...s.ph2 }}>♪</div>}
+                  <div style={s.upInfo}>
+                    <div style={s.upTitle} title={t.name}>{t.name}</div>
+                    <div style={s.upArtist}>{t.artists?.map(a => a.name).join(', ') || ''}</div>
+                  </div>
+                </div>
+              ))}
+              {!upNext.length && <div style={s.upEmpty}>自动续上…无限电台</div>}
             </div>
           </div>
         </div>
@@ -251,15 +255,17 @@ const s = {
   barTrack: { flex: 1, height: 6, background: 'rgba(0,0,0,0.28)', borderRadius: 3, overflow: 'hidden' },
   barFill: { height: '100%', background: 'rgba(255,255,255,0.9)', borderRadius: 3 },
 
-  nextRow: { display: 'flex', alignItems: 'center', gap: 10, marginTop: 2 },
-  nextThumb: { width: 40, height: 40, borderRadius: 9, objectFit: 'cover', flexShrink: 0, boxShadow: '0 4px 12px rgba(0,0,0,0.4)' },
-  ph2: { background: 'rgba(255,255,255,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 },
-  nextInfo: { minWidth: 0, flex: 1 },
-  nextTitle: { fontSize: 14, fontWeight: 600, color: '#f3f4f6', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
-  nextArtist: { fontSize: 11.5, color: '#9fb3c8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
-  dotsRow: { display: 'flex', alignItems: 'center', gap: 5, marginTop: 'auto' },
-  dot: { width: 6, height: 6, borderRadius: '50%', background: '#7dd3fc' },
-  queueNum: { marginLeft: 'auto', fontSize: 13, fontWeight: 700, color: '#bae6fd' },
+  ph2: { background: 'rgba(255,255,255,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 },
+  upHead: { display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' },
+  upCount: { fontSize: 11.5, color: '#9fb3c8' },
+  upList: { flex: 1, minHeight: 0, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8, marginTop: 6, paddingRight: 4 },
+  upRow: { display: 'flex', alignItems: 'center', gap: 9 },
+  upNum: { fontSize: 11, color: 'rgba(255,255,255,0.38)', width: 16, flexShrink: 0, textAlign: 'right', fontVariantNumeric: 'tabular-nums' },
+  upThumb: { width: 34, height: 34, borderRadius: 7, objectFit: 'cover', flexShrink: 0, boxShadow: '0 3px 10px rgba(0,0,0,0.4)' },
+  upInfo: { minWidth: 0, flex: 1 },
+  upTitle: { fontSize: 13, fontWeight: 500, color: '#e8edf3', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
+  upArtist: { fontSize: 11, color: '#9fb3c8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
+  upEmpty: { fontSize: 12.5, color: '#9fb3c8', padding: '8px 2px' },
 
   djName: { fontSize: 12.5, fontWeight: 600, color: '#e9d5ff', display: 'inline-flex', alignItems: 'center', gap: 5, marginTop: 2 },
   story: { fontSize: 13, color: 'rgba(245,240,255,0.92)', lineHeight: 1.55, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 4, WebkitBoxOrient: 'vertical' },
