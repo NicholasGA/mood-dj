@@ -477,5 +477,50 @@ ipcMain.handle('set-mini', (_e, on) => {
   } catch (e) { dlog('[mini] error', e.message) }
 })
 
+// ── 壁龛模式：贴右边缘的常驻竖条，hover 展开（动效靠宽度补间）──────────
+let dockPrevBounds = null
+let dockTween = null
+const DOCK_COLLAPSED = 76
+const DOCK_EXPANDED = 372
+function dockBounds(width) {
+  const wa = screen.getPrimaryDisplay().workArea
+  return { x: wa.x + wa.width - width, y: wa.y, width: Math.round(width), height: wa.height }   // 右缘锚定，向左生长
+}
+ipcMain.handle('set-dock', (_e, on) => {
+  if (!mainWindow) return
+  try {
+    if (dockTween) { clearInterval(dockTween); dockTween = null }
+    if (on) {
+      dockPrevBounds = mainWindow.getBounds()
+      if (mainWindow.isMaximized()) mainWindow.unmaximize()
+      mainWindow.setMinimumSize(DOCK_COLLAPSED, 240)
+      mainWindow.setResizable(true)        // dock 期间保持可 setBounds（Win 坑：false 时 setBounds 不生效）
+      mainWindow.setBounds(dockBounds(DOCK_COLLAPSED))
+      mainWindow.setAlwaysOnTop(true, 'floating')
+      mainWindow.show()
+      dlog('[dock] ON')
+    } else {
+      mainWindow.setAlwaysOnTop(false)
+      mainWindow.setMinimumSize(960, 660)
+      mainWindow.setResizable(true)
+      if (dockPrevBounds) mainWindow.setBounds(dockPrevBounds)
+      else mainWindow.setSize(1280, 820)
+      mainWindow.show(); mainWindow.focus()
+      dlog('[dock] OFF')
+    }
+  } catch (e) { dlog('[dock] error', e.message) }
+})
+ipcMain.handle('dock-resize', (_e, expand) => {
+  if (!mainWindow) return
+  const target = expand ? DOCK_EXPANDED : DOCK_COLLAPSED
+  if (dockTween) { clearInterval(dockTween); dockTween = null }
+  dockTween = setInterval(() => {
+    let w = mainWindow.getBounds().width
+    w += (target - w) * 0.34                          // 指数缓动，约 150ms 到位
+    if (Math.abs(target - w) < 2) { w = target; clearInterval(dockTween); dockTween = null }
+    try { mainWindow.setBounds(dockBounds(w)) } catch {}
+  }, 16)
+})
+
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit() })
 app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow() })

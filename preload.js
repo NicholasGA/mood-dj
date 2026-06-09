@@ -27,4 +27,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   maximize: () => ipcRenderer.send('win-maximize'),
   close:    () => ipcRenderer.send('win-close'),
   setMini:  (on) => ipcRenderer.invoke('set-mini', on),
+  setDock:    (on) => ipcRenderer.invoke('set-dock', on),
+  dockResize: (expand) => ipcRenderer.invoke('dock-resize', expand),
 })

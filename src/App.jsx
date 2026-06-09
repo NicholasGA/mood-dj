@@ -5,6 +5,7 @@ import NowPlaying from './components/NowPlaying'
 import Visualizer from './components/Visualizer'
 import DJAnnouncement from './components/DJAnnouncement'
 import MiniPlayer from './components/MiniPlayer'
+import NicheDock from './components/NicheDock'
 import Icon from './components/Icon'
 import { searchTracks, getSongUrl, getLyric, searchPlaylists, getPlaylistTracks, searchByArtist } from './services/qqMusicApi'
 import { analyzeMood, generateStory, curateTracks, interpretRequest, configureLLM, hasLLMKey, analyzeTaste, generatePersona, configurePersona, getPersona } from './services/claudeDJ'
@@ -31,6 +32,9 @@ export default function App() {
   const [albumColors, setAlbumColors] = useState(null)
   const [lyric, setLyric] = useState({ lines: [], choruses: [], hasTrans: false })
   const [miniMode, setMiniMode] = useState(false)
+  const [dockMode, setDockMode] = useState(false)        // 壁龛模式：贴右边缘的常驻竖条
+  const [dockExpanded, setDockExpanded] = useState(false)
+  const dockHoverRef = useRef(null)
   const [favCount, setFavCount] = useState(0)   // 已接入的 QQ收藏数（仅用于 UI 提示）
   const [likedCount, setLikedCount] = useState(0)   // 本地喜欢数量（喂口味，不再单独展示面板）
   const [tasteProfile, setTasteProfile] = useState(null)   // AI 音乐画像，无感呈现在主界面
@@ -294,13 +298,13 @@ export default function App() {
     return () => { cancelled = true }
   }, [currentTrack])
 
-  // 逃生通道：迷你模式下按 Esc 一定能还原
+  // 逃生通道：迷你/壁龛模式下按 Esc 一定能还原
   useEffect(() => {
-    if (!miniMode) return
-    const onKey = (e) => { if (e.key === 'Escape') toggleMini(false) }
+    if (!miniMode && !dockMode) return
+    const onKey = (e) => { if (e.key === 'Escape') { miniMode ? toggleMini(false) : toggleDock(false) } }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [miniMode])
+  }, [miniMode, dockMode])
 
   // Set up audio element events
   useEffect(() => {
@@ -584,6 +588,21 @@ export default function App() {
     setMiniMode(on)
   }
 
+  // 壁龛模式：进/出 + hover 展开（防抖：离开时略等，避免补间过程边缘抖动误收起）
+  function toggleDock(on) {
+    window.electronAPI.setDock?.(on)
+    setDockMode(on)
+    if (!on) setDockExpanded(false)
+  }
+  function onDockHover(expand) {
+    clearTimeout(dockHoverRef.current)
+    if (expand) {
+      setDockExpanded(true); window.electronAPI.dockResize?.(true)
+    } else {
+      dockHoverRef.current = setTimeout(() => { setDockExpanded(false); window.electronAPI.dockResize?.(false) }, 120)
+    }
+  }
+
   // 播放中实时调味：把新 vibe 的歌插到队首，立即生效（不重开台、不耗 Gemini）
   const VIBE = {
     up:     { key: '燃 快节奏 嗨曲 高能', dE: 0.22, pl: '运动 健身 燃歌', toast: '🔥 更带劲了' },
@@ -762,6 +781,19 @@ export default function App() {
     )
   }
 
+  // 壁龛模式：贴右边缘的常驻竖条（透明窗口，背景留空透出桌面）
+  if (dockMode) {
+    return (
+      <NicheDock
+        track={currentTrack} isPlaying={isPlaying} audioRef={audioRef}
+        accent={accent} accent2={accent2} lyric={lyric}
+        expanded={dockExpanded} onHover={onDockHover}
+        onTogglePlay={togglePlay} onNext={playNext} onVibe={adjustVibe}
+        onExit={() => toggleDock(false)} onClose={() => window.electronAPI.close()}
+      />
+    )
+  }
+
   return (
     <div style={{ '--accent': accent, '--accent2': accent2, '--breath': breath, ...styles.root }}>
       {ambientArt && <img src={ambientArt} alt="" aria-hidden style={styles.ambient} key={ambientArt} />}
@@ -781,6 +813,7 @@ export default function App() {
             {sleepMin ? <span style={{ fontSize: 10 }}>{sleepLeft || `${sleepMin}m`}</span> : null}
           </button>
           <button style={styles.wBtn} onClick={() => setShowSetup(true)} title="设置 / API Key"><Icon name="settings" size={15} color="#9ca3af" /></button>
+          <button style={styles.wBtn} onClick={() => toggleDock(true)} title="壁龛模式（贴右边缘的常驻小条，hover 展开）"><Icon name="dock" size={14} color="#9ca3af" /></button>
           <button style={styles.wBtn} onClick={() => toggleMini(true)} title="迷你播放器（置顶小窗）"><Icon name="maximize" size={13} color="#9ca3af" /></button>
           <button style={styles.wBtn} onClick={() => window.electronAPI.minimize()}>—</button>
           <button style={styles.wBtn} onClick={() => window.electronAPI.maximize()}>□</button>
