@@ -110,7 +110,7 @@ export default function NowPlayingBento({
   const emoji = moodConfig?.mood_emoji || '🎧'
   const nextArt = nextTrack?.album?.images?.[0]?.url
   const dots = Math.min(queueCount, 9)
-  const heroSurf = vivid(accent, accent2, 26)
+  const heroSurf = vivid(accent, accent2, 30)
   const pal = albumPalette(accent)   // 从专辑色推导的协调调色板（邻近色+补色）
   const seed = track?.mid || track?.id || title   // 每首歌的视觉种子
   // 让卡片成为内嵌液体层的容器：液体落在渐变之上、文字之下（z-index:-1 + isolation）
@@ -158,13 +158,13 @@ export default function NowPlayingBento({
 
           {/* 律动 | 心情 */}
           <div style={s.leftGrid}>
-            <div style={{ ...vivid(pal.energy, pal.energy, 24), ...s.tile, ...clip }}>
+            <div style={{ ...vivid(pal.energy, pal.energy, 28), ...s.tile, ...clip }}>
               <LiquidLayer accent={pal.energy} seed={`${seed}-e`} opacity={0.42} />
               <div style={s.tLabel}>律动</div>
               <MiniWave analyser={analyser} color={`color-mix(in srgb, ${pal.energy} 50%, #ffffff)`} isPlaying={isPlaying} />
               <div style={s.tValRow}><span className="led" style={s.tLed}>{Math.round(energy * 100)}</span><span style={s.tUnit}>能量</span></div>
             </div>
-            <div style={{ ...vivid(accent, accent2, 24), ...s.tile, ...clip }}>
+            <div style={{ ...vivid(accent, accent2, 28), ...s.tile, ...clip }}>
               <LiquidLayer accent={accent} seed={`${seed}-m`} opacity={0.42} />
               <div style={s.tLabel}>心情</div>
               <div style={s.moodMain}>
@@ -179,7 +179,7 @@ export default function NowPlayingBento({
           </div>
 
           {/* 接下来：整条待播列表（撑满左栏剩余高度，可滚），点开管理队列 */}
-          <div style={{ ...vividDark(pal.next, 24), ...s.tile, flex: 1, cursor: 'pointer', ...clip }} onClick={onOpenQueue} title="查看/管理队列">
+          <div style={{ ...vividDark(pal.next, 28), ...s.tile, flex: 1, cursor: 'pointer', ...clip }} onClick={onOpenQueue} title="查看/管理队列">
             <LiquidLayer accent={pal.next} seed={`${seed}-n`} opacity={0.32} />
             <div style={s.upHead}><span style={s.tLabel}>接下来</span><span style={s.upCount}>{queueCount} 首待播</span></div>
             <div style={s.upList} className="lyrics-scroll">
@@ -202,14 +202,14 @@ export default function NowPlayingBento({
 
         {/* 右栏：DJ 故事 + 歌词（撑满高度） */}
         <div style={s.right}>
-          <div style={{ ...vividDark(pal.dj, 24), ...s.tile, ...clip }}>
+          <div style={{ ...vividDark(pal.dj, 28), ...s.tile, ...clip }}>
             <LiquidLayer accent={pal.dj} seed={`${seed}-d`} opacity={0.4} />
             <div style={s.tLabel}>DJ · 这首的故事</div>
             <div style={s.djName}><Icon name="mic" size={13} color="#e9d5ff" /> {djName || '你的电台'}</div>
             <div style={s.story}>{story || '正在为这首歌写一句话…'}</div>
           </div>
           <div style={{ ...s.lyricTile, position: 'relative' }}>
-            <LiquidBox accent={accent} seed={`${seed}-l`} radius={24} />
+            <LiquidBox accent={accent} seed={`${seed}-l`} radius={28} />
             <div style={{ position: 'relative', zIndex: 1, flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', gap: 4 }}>
               <div style={s.tLabel}>♪ 歌词</div>
               <Lyrics fill lines={lyric?.lines || []} hasTrans={lyric?.hasTrans} audioRef={audioRef} accent={accent} />

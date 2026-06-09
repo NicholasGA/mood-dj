@@ -57,33 +57,31 @@ export function albumPalette(accent = '#7c3aed') {
   }
 }
 
-// 鲜艳渐变玻璃方块（参考霓虹 bento 风格）：一个色相的发光渐变 + 大圆角 + 同色辉光 + 顶部高光。
-// 透明窗口下没法真模糊，所以用"饱和渐变 + 辉光 + 半透明"还原玻璃质感。
-// 鲜艳渐变方块（参考霓虹 bento）：单一色相的柔渐变(更亮的左上 → 自然压暗的右下边缘) + 大圆角 +
-// 柔和顶部光 + 更大更散的同色柔光晕。比双色硬渐变更"高级"、更接近参考的玻璃质感（不吃 GPU 的那部分）。
-export function vivid(c1, c2 = c1, radius = 28) {
+// 鲜艳渐变玻璃方块（参考霓虹 bento 风格）：整块都保持饱和——亮角(掺白)→ 40% 本色 → 暗角(仍是 72% 本色，
+// 不再发黑) + 大圆角 + 同色辉光 + 顶部柔光，且无描边(参考是无缝色块，描边会显廉价/切割感)。
+// 关键修正：旧版渐变收到近黑(20% 本色掺 #07070d)显脏；参考是整块鲜亮、靠 bloom 与圆角立体，故改为整块浓色。
+export function vivid(c1, c2 = c1, radius = 30) {
   return {
     background: [
-      'radial-gradient(120% 80% at 30% -8%, rgba(255,255,255,0.16), rgba(255,255,255,0) 55%)',   // 柔和顶部光（不再硬反光）
-      `radial-gradient(150% 135% at 24% 12%, ${c1} 0%, color-mix(in srgb, ${c1} 60%, #0a0a12) 62%, color-mix(in srgb, ${c1} 20%, #07070d) 100%)`,  // 单色柔渐变，边缘自然压暗
+      'radial-gradient(115% 75% at 28% -5%, rgba(255,255,255,0.18), rgba(255,255,255,0) 50%)',   // 顶部柔光（玻璃斜切吃光）
+      `linear-gradient(157deg, color-mix(in srgb, ${c1} 92%, #fff) 0%, ${c1} 40%, color-mix(in srgb, ${c1} 72%, #181018) 100%)`,  // 整块浓色：亮角→本色→仍浓的暗角
     ].join(', '),
     borderRadius: radius,
-    border: '1px solid rgba(255,255,255,0.10)',
     boxShadow: [
-      'inset 0 1px 0 rgba(255,255,255,0.22)',                                   // 柔顶部高光
-      'inset 0 -44px 64px -40px rgba(0,0,0,0.42)',                              // 更柔更深的底部弧面
-      `0 28px 64px -26px color-mix(in srgb, ${c1} 44%, transparent)`,           // 柔投影（更大更散）
-      `0 0 64px -18px color-mix(in srgb, ${c1} 32%, transparent)`,              // 柔光晕（大而散，像参考的 bloom）
+      'inset 0 1px 0 rgba(255,255,255,0.28)',                                   // 柔顶部高光
+      'inset 0 -50px 70px -44px rgba(0,0,0,0.28)',                              // 极柔底部弧面（不压暗成黑）
+      `0 26px 60px -24px color-mix(in srgb, ${c1} 50%, transparent)`,           // 柔投影（更大更散，带色）
+      `0 0 70px -20px color-mix(in srgb, ${c1} 38%, transparent)`,              // 柔光晕（大而散，像参考的 bloom）
     ].join(', '),
   }
 }
 
-// 暗块（接下来/DJ 故事这类文字多的块）：深色 + 一丝色相染色，不发光，用来托住亮块、建立两亮两暗的层级
-export function vividDark(tint, radius = 28) {
+// 暗块（接下来/DJ 故事这类文字多的块）：深色 + 一丝色相染色，不发光，用来托住亮块、建立两亮两暗的层级。
+// 同样无描边——参考是无缝色块，靠柔光与阴影建立厚度。
+export function vividDark(tint, radius = 30) {
   return {
-    background: `radial-gradient(125% 100% at 28% 0%, color-mix(in srgb, ${tint} 26%, #0d1017) 0%, #0a0c12 80%)`,
+    background: `radial-gradient(125% 100% at 28% 0%, color-mix(in srgb, ${tint} 24%, #0d1017) 0%, #0a0c12 80%)`,
     borderRadius: radius,
-    border: '1px solid rgba(255,255,255,0.07)',
     boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.10), inset 0 -34px 54px -38px rgba(0,0,0,0.45), 0 22px 50px -24px rgba(0,0,0,0.55)',
   }
 }
