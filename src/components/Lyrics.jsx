@@ -7,6 +7,7 @@ export default function Lyrics({ lines, audioRef, accent = '#31c27c', hasTrans, 
   const [idx, setIdx] = useState(-1)
   const [showTrans, setShowTrans] = useState(false)
   const [seekNonce, setSeekNonce] = useState(0)
+  const [hoverIdx, setHoverIdx] = useState(null)   // 悬停的歌词行（只在字上才高亮/可点）
   const rafRef = useRef(null)
   const containerRef = useRef(null)
   const lineRefs = useRef([])
@@ -70,32 +71,47 @@ export default function Lyrics({ lines, audioRef, accent = '#31c27c', hasTrans, 
         <div style={{ padding: `${fill ? 150 : VIEW_H / 2 - 14}px 0` }}>
           {lines.map((l, i) => {
             const active = i === idx
+            const hov = hoverIdx === i
             return (
+              // 外层撑满宽度只负责居中/滚动定位，不可交互；交互交给内层贴字的 span
               <div
                 key={i}
                 ref={el => (lineRefs.current[i] = el)}
-                onClick={() => seekTo(l.time)}
                 style={{
-                  padding: '5px 10px', textAlign: 'center', cursor: 'pointer',
-                  transition: 'color .3s, transform .3s',
+                  padding: '2px 0', textAlign: 'center',
+                  transition: 'transform .3s',
                   transform: active ? 'scale(1.05)' : 'scale(1)',
                 }}
               >
-                <div style={{
-                  fontSize: active ? 15 : 13,
-                  fontWeight: active ? 700 : 400,
-                  color: active ? '#fff' : (l.isChorus ? `${accent}cc` : 'rgba(203,213,225,0.42)'),
-                  textShadow: active ? `0 0 16px ${accent}` : 'none',
-                  lineHeight: 1.25,
-                }}>
-                  {l.isChorus && <Icon name="star" size={10} color={accent} style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: 4, marginTop: -2 }} />}
-                  {l.text || '♪'}
-                </div>
-                {showTrans && l.trans && (
-                  <div style={{ fontSize: 11, marginTop: 2, color: active ? 'rgba(255,255,255,0.7)' : 'rgba(203,213,225,0.3)' }}>
-                    {l.trans}
+                <span
+                  onClick={() => seekTo(l.time)}
+                  onMouseEnter={() => setHoverIdx(i)}
+                  onMouseLeave={() => setHoverIdx(v => (v === i ? null : v))}
+                  title="点这句跳到这里"
+                  style={{
+                    display: 'inline-block', cursor: 'pointer', padding: '3px 10px', borderRadius: 9,
+                    background: hov ? 'rgba(255,255,255,0.08)' : 'transparent',
+                    transform: hov && !active ? 'scale(1.04)' : 'scale(1)',
+                    transition: 'background .15s ease, transform .2s ease',
+                  }}
+                >
+                  <div style={{
+                    fontSize: active ? 15 : 13,
+                    fontWeight: active ? 700 : 400,
+                    color: active ? '#fff' : hov ? 'rgba(255,255,255,0.88)' : (l.isChorus ? `${accent}cc` : 'rgba(203,213,225,0.42)'),
+                    textShadow: active ? `0 0 16px ${accent}` : hov ? `0 0 12px ${accent}88` : 'none',
+                    lineHeight: 1.25,
+                    transition: 'color .2s ease, text-shadow .2s ease',
+                  }}>
+                    {l.isChorus && <Icon name="star" size={10} color={accent} style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: 4, marginTop: -2 }} />}
+                    {l.text || '♪'}
                   </div>
-                )}
+                  {showTrans && l.trans && (
+                    <div style={{ fontSize: 11, marginTop: 2, color: active ? 'rgba(255,255,255,0.7)' : hov ? 'rgba(255,255,255,0.6)' : 'rgba(203,213,225,0.3)' }}>
+                      {l.trans}
+                    </div>
+                  )}
+                </span>
               </div>
             )
           })}
