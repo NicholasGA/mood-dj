@@ -704,6 +704,31 @@ export default function App() {
     } finally { setLoadingTrack(false) }
   }
 
+  // 心情卡直接拖能量/情绪条 → 即时调味（只用 QQ 搜索按能量+情绪关键词重新偏置接下来的队列，不调 Gemini）
+  async function setVibeManual(energy, valence) {
+    const ctx = radioRef.current
+    if (!ctx) return
+    energy = Math.min(1, Math.max(0, energy)); valence = Math.min(1, Math.max(0, valence))
+    ctx.energy = energy; ctx.valence = valence
+    setMoodConfig(m => (m ? { ...m, energy, valence } : m))   // 先即时更新显示
+    const eKey = energy > 0.62 ? '燃 快节奏 高能' : energy < 0.38 ? '安静 慢歌 舒缓' : ''
+    const vKey = valence > 0.62 ? '快乐 明亮 温暖' : valence < 0.38 ? '忧郁 伤感 深情' : ''
+    const extra = `${eKey} ${vKey}`.trim()
+    if (!extra) { showToast(`心情：能量 ${Math.round(energy * 100)} · 情绪 ${Math.round(valence * 100)}`); return }  // 都在中段=不偏置，只更新显示
+    setLoadingTrack(true)
+    try {
+      const fresh = []
+      const disliked = (t) => ctx.disliked && (t.artists || []).some(a => ctx.disliked.has(a.name))
+      const add = (arr) => { for (const t of arr || []) if (t?.mid && !ctx.seen.has(t.mid) && !disliked(t)) { ctx.seen.add(t.mid); fresh.push(t) } }
+      await Promise.allSettled((ctx.queries || []).slice(0, 4).map(q =>
+        searchTracks(qqCookiesRef.current, `${q} ${extra}`, 15, 2 + Math.floor(Math.random() * 6)).then(add).catch(() => {})))
+      let picked = freshen(fresh, new Set(memoryRef.current.recentMids || []), { maxPer: 2, min: 5 })
+      picked.sort(() => Math.random() - 0.5)
+      if (picked.length) { queueRef.current = [...picked, ...queueRef.current]; setQueue(queueRef.current) }  // 贴合新心情的歌排到前面，不清空原队列
+      showToast(`心情已调：能量 ${Math.round(energy * 100)} · 情绪 ${Math.round(valence * 100)}`)
+    } finally { setLoadingTrack(false) }
+  }
+
   function dislikeCurrent() {
     const ctx = radioRef.current, cur = currentTrackRef.current
     if (!ctx || !cur) return
@@ -921,7 +946,7 @@ export default function App() {
             track={currentTrack} isPlaying={isPlaying} loadingTrack={loadingTrack} audioRef={audioRef}
             accent={accent} accent2={accent2}
             onTogglePlay={togglePlay} onNext={playNext} onLike={likeCurrent} onDislike={dislikeCurrent}
-            onVibe={adjustVibe} onSteer={steerRadio} onOpenQueue={() => setShowQueue(true)} onPlayAt={queuePlayAt}
+            onVibe={adjustVibe} onSteer={steerRadio} onOpenQueue={() => setShowQueue(true)} onPlayAt={queuePlayAt} onSetVibe={setVibeManual}
             queueCount={queue.length} nextTrack={queue[0]} upNext={queue} lyric={lyric} moodConfig={moodConfig}
             story={memoryRef.current.songStories?.[currentTrack.mid] || localStory(currentTrack)}
             djName={getPersona()?.name} analyser={analyserRef} volume={volume} onVolume={setUserVolume}

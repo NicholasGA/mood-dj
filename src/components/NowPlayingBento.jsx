@@ -52,7 +52,7 @@ function MiniWave({ analyser, color, isPlaying }) {
 
 export default function NowPlayingBento({
   track, isPlaying, loadingTrack, audioRef, accent = '#31c27c', accent2 = '#4f46e5',
-  onTogglePlay, onNext, onLike, onDislike, onVibe, onSteer, onOpenQueue, onPlayAt,
+  onTogglePlay, onNext, onLike, onDislike, onVibe, onSteer, onOpenQueue, onPlayAt, onSetVibe,
   queueCount = 0, nextTrack, upNext = [], lyric, moodConfig, story, djName, analyser, volume = 0.8, onVolume, onRepick, inFav = false,
   repeatOne = false, onToggleRepeat,
 }) {
@@ -182,13 +182,14 @@ export default function NowPlayingBento({
             <div style={{ ...vivid(accent, accent2, 28), ...s.tile, ...clip }}>
               <LiquidLayer accent={accent} seed={`${seed}-m`} opacity={0.42} />
               <div style={s.tLabel}>心情</div>
-              <div style={s.moodMain}>
+              <div style={s.moodMain} onClick={onRepick} title="点这里换个心情" role="button">
                 <span style={s.moodEmojiWrap}><span style={s.moodEmoji}>{emoji}</span></span>
                 <span style={s.moodName}>{mood}</span>
+                <span style={s.moodEdit} title="换心情"><Icon name="refresh" size={13} color="rgba(255,255,255,0.7)" /></span>
               </div>
               <div style={s.gauges}>
-                <MoodGauge label="能量" v={energy} accent={accent} />
-                <MoodGauge label="情绪" v={valence} accent={accent} />
+                <MoodGauge label="能量" v={energy} accent={accent} onCommit={(val) => onSetVibe?.(val, valence)} />
+                <MoodGauge label="情绪" v={valence} accent={accent} onCommit={(val) => onSetVibe?.(energy, val)} />
               </div>
             </div>
           </div>
@@ -273,17 +274,39 @@ export default function NowPlayingBento({
 }
 
 // 心情仪表条：暗槽内嵌 + accent 渐变辉光填充 + 发光游标 + LED 读数（和「律动」一个质感）
-function MoodGauge({ label, v, accent }) {
-  const pct = Math.max(0, Math.min(100, Math.round((v || 0) * 100)))
+function MoodGauge({ label, v, accent, onCommit }) {
+  const trackRef = useRef(null)
+  const [drag, setDrag] = useState(null)   // 拖动时的实时比例（覆盖显示），松手后落定再清空
+  const cur = drag != null ? drag : (v || 0)
+  const pct = Math.max(0, Math.min(100, Math.round(cur * 100)))
+  const active = drag != null
+  const ratioFromEvent = (e) => {
+    const r = trackRef.current.getBoundingClientRect()
+    return Math.min(1, Math.max(0, (e.clientX - r.left) / r.width))
+  }
+  function onDown(e) {
+    if (!onCommit) return
+    e.stopPropagation()        // 别触发卡片层其它点击
+    setDrag(ratioFromEvent(e))
+    const move = (ev) => setDrag(ratioFromEvent(ev))
+    const up = (ev) => {
+      const val = ratioFromEvent(ev)
+      setDrag(null)
+      onCommit(val)            // 松手才落定 → 不会每拖一像素就打一次接口
+      window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up)
+    }
+    window.addEventListener('pointermove', move); window.addEventListener('pointerup', up)
+  }
   return (
     <div style={s.gRow}>
       <span style={s.gLabel}>{label}</span>
-      <div style={s.gTrack}>
-        <div style={{ ...s.gFill, width: `${pct}%`,
+      <div ref={trackRef} style={{ ...s.gTrack, ...(onCommit ? { cursor: 'pointer', touchAction: 'none' } : null) }} onPointerDown={onDown}>
+        <div style={{ ...s.gFill, width: `${pct}%`, transition: active ? 'none' : s.gFill.transition,
           background: `linear-gradient(90deg, color-mix(in srgb, ${accent} 50%, #ffffff), #ffffff)`,
           boxShadow: `0 0 10px color-mix(in srgb, ${accent} 55%, rgba(255,255,255,0.55))` }} />
-        <div style={{ ...s.gDot, left: `${pct}%`,
-          boxShadow: `0 0 8px color-mix(in srgb, ${accent} 70%, #ffffff), 0 1px 3px rgba(0,0,0,0.6)` }} />
+        <div style={{ ...s.gDot, left: `${pct}%`, transition: active ? 'none' : s.gDot.transition,
+          ...(active ? { width: 14, height: 14 } : null),
+          boxShadow: `0 0 8px color-mix(in srgb, ${accent} 70%, #ffffff), 0 1px 3px rgba(0,0,0,0.6)${active ? `, 0 0 0 4px color-mix(in srgb, ${accent} 26%, transparent)` : ''}` }} />
       </div>
       <span className="led" style={s.gVal}>{pct}</span>
     </div>
@@ -326,7 +349,8 @@ const s = {
   tLed: { fontSize: 26, color: '#fff' },
   tUnit: { fontSize: 12, color: 'rgba(255,255,255,0.78)' },
 
-  moodMain: { display: 'flex', alignItems: 'center', gap: 10, marginTop: 3 },
+  moodMain: { display: 'flex', alignItems: 'center', gap: 10, marginTop: 3, cursor: 'pointer', padding: '3px 6px', margin: '3px -6px 0', borderRadius: 12 },
+  moodEdit: { marginLeft: 'auto', flexShrink: 0, display: 'flex', alignItems: 'center', opacity: 0.7 },
   moodEmojiWrap: { width: 38, height: 38, borderRadius: 11, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(255,255,255,0.13)', border: '1px solid rgba(255,255,255,0.2)', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.18), 0 2px 8px rgba(0,0,0,0.25)' },
   moodEmoji: { fontSize: 21, lineHeight: 1 },
   moodName: { fontSize: 17, fontWeight: 800, color: '#fff', textShadow: '0 1px 6px rgba(0,0,0,0.4)', lineHeight: 1.2, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', minWidth: 0 },
