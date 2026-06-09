@@ -185,11 +185,14 @@ ipcMain.handle('install-update', () => { autoUpdater.quitAndInstall() })
 ipcMain.handle('qq-auth', () => {
   return new Promise((resolve, reject) => {
     let settled = false, timer = null
+    // 关键：用标准 Chrome UA 加载。默认 Electron UA(带 "Electron/mood-dj")会让 y.qq.com 返回乱码/异常页面。
+    const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
     const popup = new BrowserWindow({
       width: 1000, height: 700, parent: mainWindow,
       webPreferences: { nodeIntegration: false, contextIsolation: true },
     })
-    popup.loadURL('https://y.qq.com/')
+    popup.webContents.setUserAgent(UA)
+    popup.loadURL('https://y.qq.com/', { userAgent: UA })
     popup.setTitle('登录 QQ音乐 — 登录后请稍等片刻')
     const done = (cookies, err) => {
       if (settled) return; settled = true
