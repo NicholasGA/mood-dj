@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import Lyrics from './Lyrics'
 import Icon from './Icon'
-import { vivid, vividDark } from '../ui/surface'
+import { vivid, vividDark, albumPalette } from '../ui/surface'
 
 // 听歌仪表盘（bento）：把"正在播放"拆成有意义、画面填满的方块。
 // 每块都是独立信息：正在播放 / 实时律动 / 心情 / 接下来 / DJ的故事 / 控制 / 歌词。
@@ -101,6 +101,7 @@ export default function NowPlayingBento({
   const nextArt = nextTrack?.album?.images?.[0]?.url
   const dots = Math.min(queueCount, 9)
   const heroSurf = vivid(accent, accent2, 26)
+  const pal = albumPalette(accent)   // 从专辑色推导的协调调色板（邻近色+补色）
 
   return (
     <div style={s.root}>
@@ -130,10 +131,10 @@ export default function NowPlayingBento({
 
       {/* 四块 bento */}
       <div style={s.grid}>
-        {/* 律动：实时频谱 + LED 能量（亮块，用提亮的专辑色，跟着歌走最跳） */}
-        <div style={{ ...vivid(`color-mix(in srgb, ${accent} 58%, #ffffff 42%)`, accent, 20), ...s.tile }}>
+        {/* 律动：实时频谱 + LED 能量（亮块，邻近暖移色，最跳） */}
+        <div style={{ ...vivid(pal.energy, pal.energy, 20), ...s.tile }}>
           <div style={s.tLabel}>律动</div>
-          <MiniWave analyser={analyser} color={`color-mix(in srgb, ${accent} 35%, #ffffff)`} isPlaying={isPlaying} />
+          <MiniWave analyser={analyser} color={`color-mix(in srgb, ${pal.energy} 50%, #ffffff)`} isPlaying={isPlaying} />
           <div style={s.tValRow}><span className="led" style={s.tLed}>{Math.round(energy * 100)}</span><span style={s.tUnit}>能量</span></div>
         </div>
 
@@ -147,8 +148,8 @@ export default function NowPlayingBento({
           </div>
         </div>
 
-        {/* 接下来：下一首 + 队列点阵（暗块，专辑色染色，托住亮块） */}
-        <div style={{ ...vividDark(accent, 20), ...s.tile, cursor: 'pointer' }} onClick={onOpenQueue} title="查看/管理队列">
+        {/* 接下来：下一首 + 队列点阵（暗块，近补色染色，和亮块拉开色相对比） */}
+        <div style={{ ...vividDark(pal.next, 20), ...s.tile, cursor: 'pointer' }} onClick={onOpenQueue} title="查看/管理队列">
           <div style={s.tLabel}>接下来</div>
           <div style={s.nextRow}>
             {nextArt ? <img src={nextArt} alt="" style={s.nextThumb} draggable={false} /> : <div style={{ ...s.nextThumb, ...s.ph2 }}>♪</div>}
@@ -163,8 +164,8 @@ export default function NowPlayingBento({
           </div>
         </div>
 
-        {/* DJ · 这首的故事（暗块，副色染色） */}
-        <div style={{ ...vividDark(accent2, 20), ...s.tile }}>
+        {/* DJ · 这首的故事（暗块，另一侧邻近色染色） */}
+        <div style={{ ...vividDark(pal.dj, 20), ...s.tile }}>
           <div style={s.tLabel}>DJ · 这首的故事</div>
           <div style={s.djName}><Icon name="mic" size={13} color="#e9d5ff" /> {djName || '你的电台'}</div>
           <div style={s.story}>{story || '正在为这首歌写一句话…'}</div>

@@ -32,6 +32,31 @@ export const glassPill = {
   boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.14), 0 16px 40px -12px rgba(0,0,0,0.72)',
 }
 
+// 从专辑主色推导一套"协调但有色相变化"的 bento 调色板：邻近色 + 一个补色，
+// 既不单一(色相跨度大)，又永远和当前这首歌和谐(都从专辑色旋转出来，不会撞)。
+function hexToHsl(hex) {
+  let m = String(hex).replace('#', '')
+  if (m.length === 3) m = m.split('').map(c => c + c).join('')
+  const r = parseInt(m.slice(0, 2), 16) / 255, g = parseInt(m.slice(2, 4), 16) / 255, b = parseInt(m.slice(4, 6), 16) / 255
+  if ([r, g, b].some(v => Number.isNaN(v))) throw new Error('bad hex')
+  const mx = Math.max(r, g, b), mn = Math.min(r, g, b); let h, s, l = (mx + mn) / 2
+  if (mx === mn) { h = s = 0 }
+  else { const d = mx - mn; s = l > 0.5 ? d / (2 - mx - mn) : d / (mx + mn); h = mx === r ? (g - b) / d + (g < b ? 6 : 0) : mx === g ? (b - r) / d + 2 : (r - g) / d + 4; h /= 6 }
+  return [h * 360, s * 100, l * 100]
+}
+export function albumPalette(accent = '#7c3aed') {
+  let h, s
+  try { [h, s] = hexToHsl(accent) } catch { [h, s] = [265, 70] }
+  const sat = Math.max(58, Math.min(s, 84))                 // 收一下饱和，别太灰也别太荧光
+  const C = (dh, ll, ds = 0) => `hsl(${((h + dh) % 360 + 360) % 360} ${Math.max(40, Math.min(sat + ds, 88))}% ${ll}%)`
+  return {
+    energy: C(40, 58, 6),    // 律动：邻近暖移、亮（最跳）
+    mood:   C(0, 54),        // 心情：专辑本色，呼应 hero
+    next:   C(182, 50),      // 接下来：近补色（冷），交给 vividDark 压暗——制造对比色但仍同源
+    dj:     C(-42, 50),      // DJ：另一侧邻近色，交给 vividDark 压暗
+  }
+}
+
 // 鲜艳渐变玻璃方块（参考霓虹 bento 风格）：一个色相的发光渐变 + 大圆角 + 同色辉光 + 顶部高光。
 // 透明窗口下没法真模糊，所以用"饱和渐变 + 辉光 + 半透明"还原玻璃质感。
 export function vivid(c1, c2 = c1, radius = 22) {
