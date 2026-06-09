@@ -90,12 +90,12 @@ export default function NowPlaying({ track, isPlaying, loadingTrack, audioRef, o
       </div>
 
       <div style={s.progRow}>
-        <span style={{ ...s.time, color: accent }} className="digit">{fmt(progress * dur)}</span>
+        <span style={{ ...s.time, color: accent }} className="led">{fmt(progress * dur)}</span>
         <div ref={barRef} style={s.bar} onPointerDown={onBarDown}>
           <div style={{ ...s.fill, width: `${progress * 100}%`, background: `linear-gradient(90deg, ${accent}, ${accent}cc)` }} />
           <div style={{ ...s.knob, left: `${progress * 100}%`, background: accent }} />
         </div>
-        <span style={{ ...s.time, color: accent }} className="digit">{fmt(dur)}</span>
+        <span style={{ ...s.time, color: accent }} className="led">{fmt(dur)}</span>
       </div>
 
       <div style={s.controls}>

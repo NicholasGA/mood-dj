@@ -36,7 +36,10 @@ export const glassPill = {
 // 透明窗口下没法真模糊，所以用"饱和渐变 + 辉光 + 半透明"还原玻璃质感。
 export function vivid(c1, c2 = c1, radius = 22) {
   return {
-    background: `radial-gradient(135% 135% at 26% 16%, ${c1} 0%, ${c2} 58%, color-mix(in srgb, ${c2} 62%, #0a0a0f) 100%)`,
+    background: [
+      'radial-gradient(78% 52% at 50% -10%, rgba(255,255,255,0.24), rgba(255,255,255,0) 62%)',   // 顶部玻璃反光
+      `radial-gradient(135% 135% at 26% 16%, ${c1} 0%, ${c2} 58%, color-mix(in srgb, ${c2} 60%, #0a0a0f) 100%)`,
+    ].join(', '),
     borderRadius: radius,
     border: '1px solid rgba(255,255,255,0.18)',
     boxShadow: [

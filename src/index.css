@@ -90,7 +90,21 @@ input:focus, textarea:focus {
 @keyframes floaty { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-7px); } }
 .floaty { animation: floaty 5s ease-in-out infinite; }
 
-/* 发光数码风数字（参考图那种亮亮的读数）：等宽、紧、自带同色辉光 */
+/* 真·七段数码管字体（DSEG7 Classic，开源 OFL）：像参考图的 142 / 08:14 那种 LCD 读数，
+   自带未点亮的"幽灵段"背景，很有数码表质感。只对纯数字/冒号用。 */
+@font-face {
+  font-family: 'DSEG7';
+  src: url('./assets/DSEG7Classic-Bold.woff2') format('woff2');
+  font-weight: 700;
+  font-display: swap;
+}
+/* 七段读数：DSEG7 + 同色辉光。letter-spacing 收一点，size 由用处决定。 */
+.led {
+  font-family: 'DSEG7', ui-monospace, 'Consolas', monospace;
+  letter-spacing: 1px;
+  text-shadow: 0 0 16px color-mix(in srgb, currentColor 70%, transparent), 0 0 5px color-mix(in srgb, currentColor 45%, transparent);
+}
+/* 退化版发光数字（含字母时用，DSEG7 没字母）：等宽 + 辉光 */
 .digit {
   font-family: ui-monospace, 'SF Mono', 'Consolas', 'Menlo', monospace;
   font-variant-numeric: tabular-nums;
