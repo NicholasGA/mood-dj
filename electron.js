@@ -52,6 +52,7 @@ function createWindow() {
   // 加载失败诊断（仅错误时记录）
   mainWindow.webContents.on('did-fail-load', (_e, code, desc, url) => dlog('[did-fail-load]', code, desc, url))
   mainWindow.webContents.on('render-process-gone', (_e, d) => dlog('[render-gone]', JSON.stringify(d)))
+  mainWindow.webContents.on('console-message', (_e, level, message, lineNo, src) => { if (level >= 2 && !String(message).includes('Security Warning')) dlog('[renderer]', String(message).slice(0, 400), '@', String(src).split('/').pop() + ':' + lineNo) })
 }
 
 // ── qq-audio:// protocol — proxies CDN requests with session cookies ─

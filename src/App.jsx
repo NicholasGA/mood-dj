@@ -161,7 +161,7 @@ export default function App() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [playNext])
+  }, [])   // 不放 playNext 进依赖：它是后面定义的 const，会触发 TDZ；闭包在事件触发时读取即可
 
   // 睡眠定时：循环 关→15→30→60 分钟；到点前 15s 渐降音量、到点暂停并恢复音量
   function cycleSleep() {
