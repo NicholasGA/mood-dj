@@ -59,6 +59,7 @@ export default function NowPlayingBento({
   const [cur, setCur] = useState(0)        // 当前播放秒数
   const [rawDur, setRawDur] = useState(0)  // audio.duration（QQ 流有时是 Infinity）
   const [dragRatio, setDragRatio] = useState(null)  // 拖动时的比例（覆盖显示）
+  const [barHover, setBarHover] = useState(false)   // 鼠标悬停进度条 → 展开高亮，明确"已移到可拖区"
   const [steerText, setSteerText] = useState('')
   const barRef = useRef(null)
 
@@ -137,9 +138,22 @@ export default function NowPlayingBento({
               </div>
               <div style={s.progRow}>
                 <span style={{ ...s.time, ...s.timeBig, color: '#fff' }} className="led">{fmt(ratio * effDur)}</span>
-                <div ref={barRef} style={s.bar} onPointerDown={onBarDown}>
-                  <div style={{ ...s.fill, width: `${ratio * 100}%`, transition: dragRatio != null ? 'none' : s.fill.transition }} />
-                  <div style={{ ...s.knob, left: `${ratio * 100}%`, transition: dragRatio != null ? 'none' : undefined }} />
+                <div
+                  ref={barRef}
+                  style={s.barHit}
+                  onPointerDown={onBarDown}
+                  onPointerEnter={() => setBarHover(true)}
+                  onPointerLeave={() => setBarHover(false)}
+                >
+                  {(() => {
+                    const active = barHover || dragRatio != null   // 悬停或拖动 → 展开高亮
+                    return (
+                      <div style={{ ...s.bar, ...(active ? { height: 9, background: 'rgba(255,255,255,0.32)', boxShadow: `0 2px 12px -2px color-mix(in srgb, ${accent} 60%, transparent)` } : null) }}>
+                        <div style={{ ...s.fill, width: `${ratio * 100}%`, transition: dragRatio != null ? 'none' : s.fill.transition, ...(active ? { boxShadow: `0 0 10px color-mix(in srgb, ${accent} 70%, transparent)` } : null) }} />
+                        <div style={{ ...s.knob, left: `${ratio * 100}%`, transition: dragRatio != null ? 'none' : s.knob.transition, ...(active ? { width: 15, height: 15, boxShadow: `0 0 0 4px color-mix(in srgb, ${accent} 30%, transparent), 0 2px 8px rgba(0,0,0,0.55)` } : null) }} />
+                      </div>
+                    )
+                  })()}
                 </div>
                 <span style={{ ...s.time, color: 'rgba(255,255,255,0.85)' }} className="led">{fmt(effDur)}</span>
               </div>
@@ -282,9 +296,11 @@ const s = {
   progRow: { display: 'flex', alignItems: 'center', gap: 9 },
   time: { fontSize: 11, minWidth: 34, textAlign: 'center' },
   timeBig: { fontSize: 15, minWidth: 46 },
-  bar: { position: 'relative', flex: 1, height: 6, background: 'rgba(255,255,255,0.25)', borderRadius: 3, cursor: 'pointer', touchAction: 'none' },
-  fill: { position: 'absolute', top: 0, left: 0, height: '100%', borderRadius: 3, background: '#fff', transition: 'width .12s linear' },
-  knob: { position: 'absolute', top: '50%', width: 12, height: 12, borderRadius: '50%', transform: 'translate(-50%,-50%)', background: '#fff', boxShadow: '0 0 8px rgba(0,0,0,0.5)' },
+  // 命中区比可见条高（上下留白），鼠标更容易落上去/抓住，防误触；可见条居中。宽度=命中区宽，取比例不受影响
+  barHit: { position: 'relative', flex: 1, height: 18, display: 'flex', alignItems: 'center', cursor: 'pointer', touchAction: 'none' },
+  bar: { position: 'relative', width: '100%', height: 6, background: 'rgba(255,255,255,0.25)', borderRadius: 5, transition: 'height .16s ease, background .16s ease, box-shadow .16s ease' },
+  fill: { position: 'absolute', top: 0, left: 0, height: '100%', borderRadius: 5, background: '#fff', transition: 'width .12s linear, box-shadow .16s ease' },
+  knob: { position: 'absolute', top: '50%', width: 12, height: 12, borderRadius: '50%', transform: 'translate(-50%,-50%)', background: '#fff', boxShadow: '0 0 8px rgba(0,0,0,0.5)', transition: 'width .16s ease, height .16s ease, box-shadow .16s ease' },
   heroCtrl: { display: 'flex', alignItems: 'center', gap: 10, marginTop: 12 },
   playBtn: { width: 48, height: 48, borderRadius: '50%', background: '#fff', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 8px 22px rgba(0,0,0,0.35)' },
   nextBtn: { width: 40, height: 40, borderRadius: '50%', background: 'rgba(255,255,255,0.18)', border: '1px solid rgba(255,255,255,0.3)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' },
