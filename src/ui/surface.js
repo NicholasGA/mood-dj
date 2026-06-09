@@ -47,13 +47,15 @@ function hexToHsl(hex) {
 export function albumPalette(accent = '#7c3aed') {
   let h, s
   try { [h, s] = hexToHsl(accent) } catch { [h, s] = [265, 70] }
-  const sat = Math.max(58, Math.min(s, 84))                 // 收一下饱和，别太灰也别太荧光
-  const C = (dh, ll, ds = 0) => `hsl(${((h + dh) % 360 + 360) % 360} ${Math.max(40, Math.min(sat + ds, 88))}% ${ll}%)`
+  const sat = Math.max(60, Math.min(s, 82))                 // 收一下饱和，别太灰也别太荧光
+  const C = (dh, ll, ds = 0) => `hsl(${((h + dh) % 360 + 360) % 360} ${Math.max(48, Math.min(sat + ds, 88))}% ${ll}%)`
+  // 配色法则：两个亮块用「邻近色」分跨在专辑本色两侧(暖侧 energy + 冷侧 mood)，和 hero(本色)凑成一组
+  // 邻近色三重奏(像日落渐变)——不单调又同家族；两个暗块用「补色 + 分裂补色」做冷暖反差点缀。
   return {
-    energy: C(15, 62, 12),   // 律动：同家族但更亮更饱和（"更亮的专辑色"=能量，不再是出戏的偏移蓝）
-    mood:   C(0, 54),        // 心情：专辑本色，呼应 hero
-    next:   C(184, 52),      // 接下来：补色（冷暖反差），交给 vividDark 压暗——色相变化来自这俩暗块
-    dj:     C(-48, 52),      // DJ：另一侧邻近色，交给 vividDark 压暗
+    energy: C(32, 60, 8),    // 律动：暖侧邻近色 + 更亮更饱和（"被点亮的专辑色"=能量），和 mood 拉开
+    mood:   C(-18, 54),      // 心情：冷侧邻近色（和 hero 本色错开一点，不再两块同色显闷）
+    next:   C(176, 50, -2),  // 接下来：补色（冷暖反差最大的那块），交给 vividDark 压暗成"深蓝/深青"
+    dj:     C(-50, 52),      // DJ：另一侧分裂补色，交给 vividDark 压暗
   }
 }
 
@@ -79,13 +81,18 @@ export function vivid(c1, c2 = c1, radius = 30) {
   }
 }
 
-// 暗块（接下来/DJ 故事这类文字多的块）：深色 + 一丝色相染色，不发光，用来托住亮块、建立两亮两暗的层级。
-// 同样无描边——参考是无缝色块，靠柔光与阴影建立厚度。
+// 暗块（接下来/DJ 故事这类文字多的块）：深色但「色相读得出来」——顶部光斑掺较多 tint(像参考的深蓝/深青卡)，
+// 向下沉到近黑，托住亮块、建立两亮两暗的层级，同时让补色/分裂补色的冷暖反差看得见。无描边。
 export function vividDark(tint, radius = 30) {
   return {
-    background: `radial-gradient(125% 100% at 28% 0%, color-mix(in srgb, ${tint} 24%, #0d1017) 0%, #0a0c12 80%)`,
+    background: `radial-gradient(120% 105% at 30% -6%, color-mix(in srgb, ${tint} 52%, #0e1118) 0%, color-mix(in srgb, ${tint} 20%, #0b0d14) 52%, #090b11 100%)`,
     borderRadius: radius,
-    boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.10), inset 0 -34px 54px -38px rgba(0,0,0,0.45), 0 22px 50px -24px rgba(0,0,0,0.55)',
+    boxShadow: [
+      'inset 0 1px 0 rgba(255,255,255,0.12)',
+      'inset 0 -34px 54px -38px rgba(0,0,0,0.42)',
+      `0 22px 50px -24px color-mix(in srgb, ${tint} 30%, transparent)`,   // 带色柔投影（暗块也有一点氛围）
+      `0 0 60px -26px color-mix(in srgb, ${tint} 30%, transparent)`,
+    ].join(', '),
   }
 }
 
