@@ -376,37 +376,35 @@ ipcMain.handle('qq-get-favorites', async () => {
   } catch (e) { dlog('[fav] error', e.message); return null }
 })
 
-// ── 取某个歌单(我喜欢/自建/收藏的)的歌：走主进程，带登录 cookie，能读别人公开歌单。
-//    分页拉到 cap 首(默认 100；找歌·我的收藏传大值，把整张歌单拉下来供搜索) ──
-ipcMain.handle('qq-get-playlist-tracks', async (_e, dissid, num = 100) => {
+// ── 取某个歌单(我喜欢/自建/收藏的)的一页歌：走主进程，带登录 cookie，能读别人公开歌单。
+//    返回 { tracks, total, hasMore }，渲染层据此渐进加载(先显首页、后台补全)，能读别人公开歌单 ──
+ipcMain.handle('qq-get-playlist-page', async (_e, dissid, begin = 0, num = 100) => {
+  const EMPTY = { tracks: [], total: 0, hasMore: false }
   try {
-    if (!dissid) return []
+    if (!dissid) return EMPTY
     const session = mainWindow.webContents.session
     const allCookies = await session.cookies.get({})
     const uin = resolveUin(allCookies)
     const cookieHeader = allCookies.filter(c => c.domain?.includes('qq.com')).map(c => `${c.name}=${c.value}`).join('; ')
     const headers = { 'Referer': 'https://y.qq.com/', 'User-Agent': 'Mozilla/5.0', 'Cookie': cookieHeader, 'Content-Type': 'application/json' }
-    const cap = Math.min(Number(num) || 100, 5000), PAGE = 100
-    const out = []
-    for (let begin = 0; out.length < cap && begin < 8000; begin += PAGE) {
-      const body = JSON.stringify({
-        comm: { ct: 19, cv: 1859, uin, format: 'json' },
-        req_1: { module: 'music.srfDissInfo.aiDissInfo', method: 'uniform_get_Dissinfo', param: { disstid: Number(dissid), tag: 1, userinfo: 0, song_begin: begin, song_num: PAGE } },
-      })
-      const r = await net.fetch('https://u.y.qq.com/cgi-bin/musicu.fcg', { method: 'POST', headers, body })
-      const songs = (await r.json()).req_1?.data?.songlist || []
-      if (!songs.length) break
-      for (const s of songs) if (s.mid) out.push({
-        id: String(s.id ?? s.mid), mid: s.mid, media_mid: s.file?.media_mid || s.mid, name: s.name,
-        artists: (s.singer || []).map(a => ({ name: a.name })),
-        album: { name: s.album?.name, images: s.album?.mid ? [{ url: `https://y.gtimg.cn/music/photo_new/T002R300x300M000${s.album.mid}.jpg` }] : [] },
-        duration_ms: (s.interval || 0) * 1000, uri: `qqmusic:${s.mid}`,
-      })
-      if (songs.length < PAGE) break
-    }
-    dlog('[pl-tracks]', dissid, '→', out.length, '首')
-    return out.slice(0, cap)
-  } catch (e) { dlog('[pl-tracks] error', e.message); return [] }
+    const b = Number(begin) || 0, n = Number(num) || 100
+    const body = JSON.stringify({
+      comm: { ct: 19, cv: 1859, uin, format: 'json' },
+      req_1: { module: 'music.srfDissInfo.aiDissInfo', method: 'uniform_get_Dissinfo', param: { disstid: Number(dissid), tag: 1, userinfo: 0, song_begin: b, song_num: n } },
+    })
+    const r = await net.fetch('https://u.y.qq.com/cgi-bin/musicu.fcg', { method: 'POST', headers, body })
+    const d = (await r.json()).req_1?.data || {}
+    const songs = d.songlist || []
+    const tracks = songs.filter(s => s.mid).map(s => ({
+      id: String(s.id ?? s.mid), mid: s.mid, media_mid: s.file?.media_mid || s.mid, name: s.name,
+      artists: (s.singer || []).map(a => ({ name: a.name })),
+      album: { name: s.album?.name, images: s.album?.mid ? [{ url: `https://y.gtimg.cn/music/photo_new/T002R300x300M000${s.album.mid}.jpg` }] : [] },
+      duration_ms: (s.interval || 0) * 1000, uri: `qqmusic:${s.mid}`,
+    }))
+    const total = d.dirinfo?.songnum ?? d.total_song_num ?? d.songnum ?? (b + songs.length)
+    const hasMore = songs.length > 0 && (total ? (b + songs.length < total) : songs.length >= n)
+    return { tracks, total, hasMore }
+  } catch (e) { dlog('[pl-page] error', e.message); return EMPTY }
 })
 
 // ── 取"我喜欢"的全部 mid（用于标"已收藏/新歌"，避免重复收藏）。分页拉，调用方缓存 ──

@@ -5,13 +5,15 @@ import { glass } from '../ui/surface'
 // 找歌面板：「搜歌」按歌名/歌手搜 QQ音乐；「我的收藏」浏览我的歌单(我喜欢/自建/收藏的)→打开看歌→播。
 // 都和"跟 DJ 说想法"分开。onSearch(q)→Promise<tracks>；onLoadPlaylist(id)→Promise<tracks>；
 // onPlay(track) 立即播；onQueue(track) 加入队列；onPlayList(tracks) 整批播(随机听)。
-export default function SongSearch({ accent = '#31c27c', playlists = [], onSearch, onLoadPlaylist, onPlay, onQueue, onPlayList, onClose }) {
+export default function SongSearch({ accent = '#31c27c', playlists = [], onSearch, onLoadPage, onPlay, onQueue, onPlayList, onClose }) {
   const [tab, setTab] = useState('search')
   const [q, setQ] = useState('')
   const [results, setResults] = useState([])
   const [loading, setLoading] = useState(false)
   const [sel, setSel] = useState(null)        // 选中的歌单
   const [plTracks, setPlTracks] = useState([])
+  const [plTotal, setPlTotal] = useState(0)
+  const [loadingMore, setLoadingMore] = useState(false)   // 首页已显示、后台仍在补全剩余
   const [oldFirst, setOldFirst] = useState(false)   // 排序：默认新→旧；开 = 旧→新
   const reqRef = useRef(0)
 
@@ -30,15 +32,28 @@ export default function SongSearch({ accent = '#31c27c', playlists = [], onSearc
     return () => clearTimeout(t)
   }, [q, tab, onSearch])
 
-  // 打开某歌单 → 拉它的歌
+  // 打开某歌单 → 渐进加载：先拉首页(秒显)，再后台一页页补全，搜索随之越来越全
   useEffect(() => {
-    if (!sel) { setPlTracks([]); return }
+    if (!sel) { setPlTracks([]); setPlTotal(0); setLoadingMore(false); return }
     let cancelled = false
-    setLoading(true); setPlTracks([])
-    Promise.resolve(onLoadPlaylist?.(sel.id)).then(ts => { if (!cancelled) setPlTracks(Array.isArray(ts) ? ts : []) })
-      .catch(() => { if (!cancelled) setPlTracks([]) }).finally(() => { if (!cancelled) setLoading(false) })
+    setLoading(true); setLoadingMore(true); setPlTracks([]); setPlTotal(0)
+    ;(async () => {
+      let begin = 0; const all = []
+      for (;;) {
+        let page = null
+        try { page = await onLoadPage?.(sel.id, begin) } catch {}
+        if (cancelled) return
+        const tracks = page?.tracks || []
+        all.push(...tracks)
+        setPlTracks(all.slice())
+        if (begin === 0) { setPlTotal(page?.total || tracks.length); setLoading(false) }  // 首页到手即显示
+        begin += tracks.length
+        if (!page || !page.hasMore || tracks.length === 0 || begin >= 8000) break
+      }
+      if (!cancelled) { setLoading(false); setLoadingMore(false) }
+    })()
     return () => { cancelled = true }
-  }, [sel, onLoadPlaylist])
+  }, [sel])
 
   const ql = q.trim().toLowerCase()
   const matchT = (t) => (t.name || '').toLowerCase().includes(ql) || (t.artists || []).some(a => (a.name || '').toLowerCase().includes(ql))
@@ -111,11 +126,14 @@ export default function SongSearch({ accent = '#31c27c', playlists = [], onSearc
 
           {/* 我的收藏：某歌单里的歌 */}
           {inPlaylist && (<>
-            {loading && <div style={s.hint}>读取「{sel.name}」全部歌曲…</div>}
-            {!loading && plTracks.length > 0 && trackList.length === 0 && <div style={s.hint}>这个歌单里没有「{q.trim()}」</div>}
-            {!loading && plTracks.length === 0 && <div style={s.hint}>这个歌单没取到歌</div>}
+            {loading && <div style={s.hint}>读取「{sel.name}」…</div>}
+            {!loading && plTracks.length === 0 && !loadingMore && <div style={s.hint}>这个歌单没取到歌</div>}
+            {!loading && plTracks.length > 0 && trackList.length === 0 && (
+              <div style={s.hint}>{loadingMore ? `「${q.trim()}」暂未找到，仍在补全…` : `这个歌单里没有「${q.trim()}」`}</div>
+            )}
             {trackList.slice(0, 300).map((t, i) => <TrackRow key={`${t.mid}-${i}`} t={t} accent={accent} onPlay={onPlay} onQueue={onQueue} />)}
             {!loading && trackList.length > 300 && <div style={s.hint}>共 {trackList.length} 首，已显示前 300 —— 输入关键词可搜全部</div>}
+            {loadingMore && plTracks.length > 0 && <div style={s.hint}>已载入 {plTracks.length}{plTotal ? `/${plTotal}` : ''} 首，继续补全中…</div>}
           </>)}
         </div>
       </div>
