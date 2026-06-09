@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { configureLLM, hasLLMKey } from '../services/claudeDJ'
+import { configureLLM } from '../services/claudeDJ'
 
 // 既是首次新手引导，也是设置面板（canClose=true 时可关闭返回）
 export default function Onboarding({ qqCookies, onQQAuth, onReady, onClose, canClose }) {
@@ -36,19 +36,6 @@ export default function Onboarding({ qqCookies, onQQAuth, onReady, onClose, canC
     configureLLM(cfg)
     setSaved(true)
     setTimeout(() => setSaved(false), 1800)
-  }
-
-  // OpenRouter 一键授权（PKCE，主进程弹窗代办）→ 自动回填 key，免去注册→建key→复制→粘贴
-  async function connectOpenRouter() {
-    setErr('')
-    try {
-      const key = await window.electronAPI.openrouterOAuth()
-      if (!key) { setErr('OpenRouter 连接已取消'); return }
-      setOpenrouterKey(key)
-      const cfg = { geminiKey: geminiKey.trim(), openrouterKey: key, onboarded: true }
-      await window.electronAPI.storeConfig(cfg); configureLLM(cfg)
-      setSaved(true); setTimeout(() => setSaved(false), 1800)
-    } catch (e) { setErr('OpenRouter 连接失败：' + e.message) }
   }
 
   function finish() {
@@ -89,16 +76,13 @@ export default function Onboarding({ qqCookies, onQQAuth, onReady, onClose, canC
           </div>
           <p style={s.hint}>
             填了才有「AI 分析心情 / 智能选歌 / 基于歌词的歌曲介绍」；<b style={{ color: '#cbd5e1' }}>不填也能用</b>——这些会用本地兜底，随时能回设置里补。
+            <span style={s.link} onClick={() => open('https://aistudio.google.com/apikey')}>　免费获取 Gemini Key →</span>
           </p>
-          <button style={{ ...s.btn, padding: '11px 0', background: 'linear-gradient(135deg,#7c3aed,#4f46e5)', marginBottom: 8 }} onClick={connectOpenRouter}>
-            🔗 一键连接 OpenRouter（中文介绍更稳 · 免复制粘贴）
-          </button>
+          <input style={s.input} type="password" placeholder="Gemini API Key（多个逗号分隔，可留空）"
+            value={geminiKey} onChange={e => setGeminiKey(e.target.value)} />
           <details style={s.adv}>
-            <summary style={s.advSum}>或手动填 key（Gemini / OpenRouter）</summary>
-            <p style={s.hint}>Gemini：<span style={s.link} onClick={() => open('https://aistudio.google.com/apikey')}>免费获取 →</span></p>
-            <input style={s.input} type="password" placeholder="Gemini API Key（多个逗号分隔，可留空）"
-              value={geminiKey} onChange={e => setGeminiKey(e.target.value)} />
-            <p style={s.hint}>OpenRouter：<span style={s.link} onClick={() => open('https://openrouter.ai/keys')}>免费获取 →</span></p>
+            <summary style={s.advSum}>高级（可选）：OpenRouter 兜底</summary>
+            <p style={s.hint}>所有 Gemini key 限流后用它兜底（注：免费层可能需先充值）。<span style={s.link} onClick={() => open('https://openrouter.ai/keys')}>获取 →</span></p>
             <input style={s.input} type="password" placeholder="OpenRouter API Key（可留空）"
               value={openrouterKey} onChange={e => setOpenrouterKey(e.target.value)} />
           </details>
