@@ -21,7 +21,7 @@ function getContextSuggestion(d = new Date()) {
   return { emoji: '😴', when: '深夜', text: '深夜了，来点安静助眠的 lofi', energy: 0.2, valence: 0.45 }
 }
 
-const PRESET_MOODS = [
+export const PRESET_MOODS = [
   { label: '开心', vibe: '轻快明亮', icon: 'smile', color: '#fbbf24', filled: false, text: '今天很开心，想听轻快的音乐', energy: 0.65, valence: 0.85 },
   { label: '亢奋', vibe: '越嗨越好', icon: 'flame', color: '#fb923c', filled: false, text: '精力充沛想蹦迪，越嗨越好', energy: 0.95, valence: 0.75 },
   { label: '平静', vibe: '舒缓放松', icon: 'leaf', color: '#4ade80', filled: false, text: '想放松一下，安静地听听音乐', energy: 0.25, valence: 0.6 },

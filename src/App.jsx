@@ -16,6 +16,7 @@ import { effectiveVolume, clampVol } from './services/audioVolume'
 import { glassSoft } from './ui/surface'
 import { freshen, pushRecent, removeAt, moveToFront, pushHistory } from './services/radio'
 import QueuePanel from './components/QueuePanel'
+import MoodSwitcher from './components/MoodSwitcher'
 import { keyToAction } from './services/shortcuts'
 import { remainingLabel, sleepVolume, nextDuration } from './services/sleepTimer'
 import { extractAlbumColors } from './services/albumColor'
@@ -40,6 +41,7 @@ export default function App() {
   const [tasteProfile, setTasteProfile] = useState(null)   // AI 音乐画像，无感呈现在主界面
   const [showQueue, setShowQueue] = useState(false)   // 播放队列面板
   const [showPicker, setShowPicker] = useState(false)   // 播放中点"换心情"→ 回到选心情
+  const [showMoodPop, setShowMoodPop] = useState(false) // 播放中点心情名 → 原地弹换心情小浮窗
   const [maximized, setMaximized] = useState(false)     // 最大化时去掉窗口圆角
   const [repeatOne, setRepeatOne] = useState(false)     // 单曲循环：放完重头放本首，不续下一首
   const repeatOneRef = useRef(repeatOne)                // 给 onEnded 闭包读最新值
@@ -970,7 +972,7 @@ export default function App() {
             story={memoryRef.current.songStories?.[currentTrack.mid] || localStory(currentTrack)}
             djName={getPersona()?.name} analyser={analyserRef} volume={volume} onVolume={setUserVolume}
             inFav={favMids.has(currentTrack.mid)}
-            onRepick={() => setShowPicker(true)}
+            onRepick={() => setShowMoodPop(true)}
             repeatOne={repeatOne} onToggleRepeat={() => setRepeatOne(v => !v)}
           />
         ) : (
@@ -1003,6 +1005,15 @@ export default function App() {
           onClear={queueClear}
           onPlayHistory={playFromHistory}
           onExport={exportToQQ}
+        />
+      )}
+
+      {showMoodPop && (
+        <MoodSwitcher
+          accent={accent}
+          isLoading={isLoading}
+          onClose={() => setShowMoodPop(false)}
+          onPick={(t, e, v) => { setShowMoodPop(false); startRadio(t, e, v) }}
         />
       )}
     </div>
