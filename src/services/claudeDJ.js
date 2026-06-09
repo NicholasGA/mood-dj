@@ -3,7 +3,9 @@ export const splitKeys = (s) => (s || '').split(',').map(x => x.trim()).filter(B
 let GEMINI_KEYS = splitKeys(import.meta.env.VITE_GEMINI_API_KEY)
 let MODEL = import.meta.env.VITE_GEMINI_MODEL || 'gemini-2.5-flash-lite'
 let OPENROUTER_KEY = import.meta.env.VITE_OPENROUTER_API_KEY || ''
-let OPENROUTER_MODEL = import.meta.env.VITE_OPENROUTER_MODEL || 'meta-llama/llama-3.3-70b-instruct:free'
+// 默认用中文母语的免费模型（GLM-Air：轻量低延迟）；:free 会轮换下架，故带一串中文系兜底逐个试
+let OPENROUTER_MODEL = import.meta.env.VITE_OPENROUTER_MODEL || 'z-ai/glm-4.5-air:free'
+const OPENROUTER_FALLBACKS = ['z-ai/glm-4.5-air:free', 'qwen/qwen3-next-80b-a3b-instruct:free', 'moonshotai/kimi-k2.6:free']
 
 // 应用启动时用持久化配置覆盖
 export function configureLLM(cfg = {}) {
@@ -69,14 +71,26 @@ async function callGemini(key, system, userMsg, maxTokens, temperature) {
 }
 
 async function callOpenRouter(system, userMsg, maxTokens, temperature) {
-  const res = await fetchJSON('https://openrouter.ai/api/v1/chat/completions', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${OPENROUTER_KEY}` },
-    body: JSON.stringify({ model: OPENROUTER_MODEL, max_tokens: maxTokens, temperature, messages: [{ role: 'system', content: system }, { role: 'user', content: userMsg }] }),
-  })
-  if (!res.ok) throw new Error(`openrouter ${res.status}`)
-  const data = await res.json()
-  return (data.choices?.[0]?.message?.content || '').trim()
+  // 依次试 默认模型 + 中文系兜底（某个被下架/限流就换下一个）
+  const models = [OPENROUTER_MODEL, ...OPENROUTER_FALLBACKS].filter((m, i, a) => a.indexOf(m) === i)
+  let lastErr
+  for (const model of models) {
+    try {
+      const res = await fetchJSON('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json', 'Authorization': `Bearer ${OPENROUTER_KEY}`,
+          'HTTP-Referer': 'https://github.com/NicholasGA/mood-dj', 'X-Title': 'Mood DJ',
+        },
+        body: JSON.stringify({ model, max_tokens: maxTokens, temperature, messages: [{ role: 'system', content: system }, { role: 'user', content: userMsg }] }),
+      })
+      if (!res.ok) { lastErr = new Error(`openrouter ${res.status}`); continue }
+      const text = ((await res.json()).choices?.[0]?.message?.content || '').trim()
+      if (text) return text
+      lastErr = new Error('openrouter empty')
+    } catch (e) { lastErr = e }
+  }
+  throw lastErr || new Error('openrouter failed')
 }
 
 // 统一 LLM 入口：先看每日预算（超额→抛 budget 让调用方走本地兜底），
