@@ -294,9 +294,17 @@ export default function App() {
   function queueRemove(i) { const q = removeAt(queueRef.current, i); queueRef.current = q; setQueue(q) }
   function queueClear() { queueRef.current = []; setQueue([]); setShowQueue(false) }
   function playFromHistory(track) { if (!track?.mid) return; queueRef.current = [track, ...queueRef.current]; setQueue(queueRef.current); setShowQueue(false); playNext() }
-  // 搜歌面板：立即播 / 加入队列
+  // 找歌面板：立即播 / 加入队列 / 整批播(随机听收藏)
   function playSearched(track) { if (!track?.mid) return; queueRef.current = [track, ...queueRef.current]; setQueue(queueRef.current); setShowSearch(false); playNext() }
   function queueSearched(track) { if (!track?.mid) return; queueRef.current = [...queueRef.current, track]; setQueue(queueRef.current); showToast(`已加入队列：${track.name}`) }
+  function playList(tracks) { if (!tracks?.length) return; queueRef.current = tracks.filter(t => t?.mid); setQueue(queueRef.current); setShowSearch(false); playNext() }
+  // 读取「我的收藏」整张「我喜欢」歌单（兜底用个性化样本）
+  async function loadFavorites() {
+    const f = favRef.current
+    const pid = f?.playlistIds?.[0]
+    if (pid) { try { const ts = await getPlaylistTracks(qqCookiesRef.current, pid, 100); if (ts?.length) return ts } catch {} }
+    return f?.sample || []
+  }
 
   // 把一批歌导出成一个新 QQ 歌单（签名版接口）
   async function exportToQQ(tracks, label) {
@@ -1016,9 +1024,12 @@ export default function App() {
       {showSearch && (
         <SongSearch
           accent={accent}
+          favCount={favCount}
           onSearch={(query) => searchTracks(qqCookiesRef.current, query, 20)}
+          onLoadFavorites={loadFavorites}
           onPlay={playSearched}
           onQueue={queueSearched}
+          onPlayList={playList}
           onClose={() => setShowSearch(false)}
         />
       )}
