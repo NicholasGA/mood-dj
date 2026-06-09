@@ -2,8 +2,9 @@ import { useState } from 'react'
 import Icon from './Icon'
 
 // 播放队列 + 历史面板：「接下来」可播某首/置顶/移除/清空；「最近」点歌即重听
-export default function QueuePanel({ queue = [], history = [], accent = '#31c27c', onClose, onPlayAt, onToFront, onRemove, onClear, onPlayHistory }) {
+export default function QueuePanel({ queue = [], history = [], accent = '#31c27c', onClose, onPlayAt, onToFront, onRemove, onClear, onPlayHistory, onExport }) {
   const [tab, setTab] = useState('queue')
+  const curList = tab === 'queue' ? queue : history
 
   const Tab = ({ id, label, n }) => (
     <button
@@ -18,8 +19,16 @@ export default function QueuePanel({ queue = [], history = [], accent = '#31c27c
         <div style={s.head}>
           <Tab id="queue" label="接下来" n={queue.length} />
           <Tab id="history" label="最近" n={history.length} />
-          {tab === 'queue' && queue.length > 0 && <button style={s.clear} onClick={onClear}>清空</button>}
-          <button style={s.close} onClick={onClose}>✕</button>
+          <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
+            {onExport && curList.length > 0 && (
+              <button style={{ ...s.clear, color: accent, borderColor: `${accent}66`, display: 'inline-flex', alignItems: 'center', gap: 4 }} title="把这些歌存成一个 QQ 歌单"
+                onClick={() => onExport(curList, tab === 'queue' ? '电台' : '最近在听')}>
+                <Icon name="heart" size={11} color={accent} filled /> 导出歌单
+              </button>
+            )}
+            {tab === 'queue' && queue.length > 0 && <button style={s.clear} onClick={onClear}>清空</button>}
+            <button style={s.close} onClick={onClose}>✕</button>
+          </div>
         </div>
 
         <div style={s.list} className="lyrics-scroll">

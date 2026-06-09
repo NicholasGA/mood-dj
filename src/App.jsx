@@ -197,6 +197,18 @@ export default function App() {
   function queueClear() { queueRef.current = []; setQueue([]); setShowQueue(false) }
   function playFromHistory(track) { if (!track?.mid) return; queueRef.current = [track, ...queueRef.current]; setQueue(queueRef.current); setShowQueue(false); playNext() }
 
+  // 把一批歌导出成一个新 QQ 歌单（签名版接口）
+  async function exportToQQ(tracks, label) {
+    const ids = [...new Set((tracks || []).map(t => t.id).filter(Boolean))]
+    if (!ids.length) { showToast('没有可导出的歌'); return }
+    showToast('⏳ 正在新建 QQ 歌单…')
+    const name = `Mood DJ · ${label || '电台'}`
+    const dirId = await window.electronAPI.createQQPlaylist(name)
+    if (!dirId) { showToast('建歌单失败（QQ 接口拒绝）'); return }
+    const ok = await window.electronAPI.addSongsToQQPlaylist(dirId, ids)
+    showToast(`✅ 已建歌单「${name}」，加入 ${ok}/${ids.length} 首`)
+  }
+
   // 当前歌曲变化时，从封面提取主题色（失败则回退心情色）
   useEffect(() => {
     const art = currentTrack?.album?.images?.[0]?.url
@@ -757,6 +769,7 @@ export default function App() {
           onRemove={queueRemove}
           onClear={queueClear}
           onPlayHistory={playFromHistory}
+          onExport={exportToQQ}
         />
       )}
     </div>

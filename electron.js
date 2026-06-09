@@ -316,6 +316,47 @@ ipcMain.handle('qq-add-favorite', async (_e, songId) => {
   } catch (e) { dlog('[fav-add] error', e.message); return false }
 })
 
+// 签名版 musics.fcg 通用调用（写操作用）：返回 req_1 的解析结果
+async function signedMusics(req) {
+  const allCookies = await mainWindow.webContents.session.cookies.get({})
+  const uin = resolveUin(allCookies)
+  if (uin === '0') return null
+  const cookieHeader = allCookies.filter(c => c.domain?.includes('qq.com')).map(c => `${c.name}=${c.value}`).join('; ')
+  const body = JSON.stringify({ comm: { ct: 24, cv: 0, uin, format: 'json' }, req_1: req })
+  const res = await net.fetch(`https://u.y.qq.com/cgi-bin/musics.fcg?_=${Date.now()}&sign=${qqSign(body)}`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', 'Referer': 'https://y.qq.com/', 'Cookie': cookieHeader }, body,
+  })
+  return (await res.json()).req_1
+}
+
+// ── 新建歌单 → 返回新歌单 dirId（失败 0）────────────────────────────
+ipcMain.handle('qq-create-playlist', async (_e, name) => {
+  try {
+    if (!name) return 0
+    const r = await signedMusics({ module: 'music.musicasset.PlaylistBaseWrite', method: 'AddPlaylist', param: { dirName: String(name).slice(0, 30) } })
+    const dirId = r?.code === 0 ? (r?.data?.result?.dirId || 0) : 0
+    dlog('[pl-create]', name, '→ dirId', dirId, '(code', r?.code, ')')
+    return dirId
+  } catch (e) { dlog('[pl-create] error', e.message); return 0 }
+})
+
+// ── 把若干歌加入某歌单(dirId)，分批 → 返回成功首数 ──────────────────
+ipcMain.handle('qq-add-songs', async (_e, dirId, songIds) => {
+  try {
+    const ids = (songIds || []).map(Number).filter(Boolean)
+    if (!dirId || !ids.length) return 0
+    let ok = 0
+    for (let i = 0; i < ids.length; i += 40) {
+      const chunk = ids.slice(i, i + 40)
+      const r = await signedMusics({ module: 'music.musicasset.PlaylistDetailWrite', method: 'AddSonglist', param: { dirId: Number(dirId), v_songInfo: chunk.map(id => ({ songId: id, songType: 0 })) } })
+      ok += (r?.data?.result?.songlist || []).filter(s => s.backendSongId).length
+      await new Promise(res => setTimeout(res, 150))
+    }
+    dlog('[pl-add]', dirId, ok + '/' + ids.length)
+    return ok
+  } catch (e) { dlog('[pl-add] error', e.message); return 0 }
+})
+
 // ── Token / cookie persistence ─────────────────────────────────────
 const dataDir  = () => app.getPath('userData')
 const qqFile    = () => path.join(dataDir(), 'mooddj-qq.json')
