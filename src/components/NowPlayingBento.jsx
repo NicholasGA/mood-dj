@@ -302,7 +302,7 @@ function MoodGauge({ label, v, accent, onCommit }) {
   const commitEdit = () => {
     const n = Math.max(0, Math.min(100, parseInt(editVal, 10) || 0))
     setEditing(false)
-    onCommit?.(n / 100)
+    if (n !== pct) onCommit?.(n / 100)   // 值没变就不重新换歌
   }
   const ratioFromEvent = (e) => {
     const r = trackRef.current.getBoundingClientRect()
@@ -311,12 +311,13 @@ function MoodGauge({ label, v, accent, onCommit }) {
   function onDown(e) {
     if (!onCommit) return
     e.stopPropagation()        // 别触发卡片层其它点击
+    const startPct = Math.round((v || 0) * 100)   // 记下起始值，没动就不换歌
     setDrag(ratioFromEvent(e))
     const move = (ev) => setDrag(ratioFromEvent(ev))
     const up = (ev) => {
       const val = ratioFromEvent(ev)
       setDrag(null)
-      onCommit(val)            // 松手才落定 → 不会每拖一像素就打一次接口
+      if (Math.round(val * 100) !== startPct) onCommit(val)   // 松手才落定，且位置变了才换歌
       window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up)
     }
     window.addEventListener('pointermove', move); window.addEventListener('pointerup', up)
