@@ -50,10 +50,10 @@ export function albumPalette(accent = '#7c3aed') {
   const sat = Math.max(58, Math.min(s, 84))                 // 收一下饱和，别太灰也别太荧光
   const C = (dh, ll, ds = 0) => `hsl(${((h + dh) % 360 + 360) % 360} ${Math.max(40, Math.min(sat + ds, 88))}% ${ll}%)`
   return {
-    energy: C(40, 58, 6),    // 律动：邻近暖移、亮（最跳）
+    energy: C(15, 62, 12),   // 律动：同家族但更亮更饱和（"更亮的专辑色"=能量，不再是出戏的偏移蓝）
     mood:   C(0, 54),        // 心情：专辑本色，呼应 hero
-    next:   C(182, 50),      // 接下来：近补色（冷），交给 vividDark 压暗——制造对比色但仍同源
-    dj:     C(-42, 50),      // DJ：另一侧邻近色，交给 vividDark 压暗
+    next:   C(184, 52),      // 接下来：补色（冷暖反差），交给 vividDark 压暗——色相变化来自这俩暗块
+    dj:     C(-48, 52),      // DJ：另一侧邻近色，交给 vividDark 压暗
   }
 }
 

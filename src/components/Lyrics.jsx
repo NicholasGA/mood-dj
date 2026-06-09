@@ -3,7 +3,7 @@ import Icon from './Icon'
 
 const VIEW_H = 188
 
-export default function Lyrics({ lines, audioRef, accent = '#31c27c', hasTrans }) {
+export default function Lyrics({ lines, audioRef, accent = '#31c27c', hasTrans, fill = false }) {
   const [idx, setIdx] = useState(-1)
   const [showTrans, setShowTrans] = useState(false)
   const [seekNonce, setSeekNonce] = useState(0)
@@ -49,10 +49,10 @@ export default function Lyrics({ lines, audioRef, accent = '#31c27c', hasTrans }
     if (audio.paused) audio.play().catch(() => {})
   }
 
-  if (!lines?.length) return <div style={s.empty}>♪ 纯音乐 / 暂无歌词 ♪</div>
+  if (!lines?.length) return <div style={fill ? s.emptyFill : s.empty}>♪ 纯音乐 / 暂无歌词 ♪</div>
 
   return (
-    <div style={s.wrap}>
+    <div style={fill ? s.wrapFill : s.wrap}>
       {hasTrans && (
         <button
           style={{ ...s.langBtn, color: showTrans ? accent : 'rgba(203,213,225,0.6)', borderColor: showTrans ? accent : 'rgba(255,255,255,0.15)' }}
@@ -63,11 +63,11 @@ export default function Lyrics({ lines, audioRef, accent = '#31c27c', hasTrans }
       <div
         ref={containerRef}
         className="lyrics-scroll"
-        style={s.view}
+        style={fill ? s.viewFill : s.view}
         onWheel={pauseAuto}
         onPointerDown={pauseAuto}
       >
-        <div style={{ padding: `${VIEW_H / 2 - 14}px 0` }}>
+        <div style={{ padding: `${fill ? 150 : VIEW_H / 2 - 14}px 0` }}>
           {lines.map((l, i) => {
             const active = i === idx
             return (
@@ -120,6 +120,17 @@ const s = {
   },
   empty: {
     height: VIEW_H, display: 'flex', alignItems: 'center', justifyContent: 'center',
+    color: 'rgba(203,213,225,0.35)', fontSize: 13, letterSpacing: 1,
+  },
+  // fill 模式：撑满右栏剩余高度
+  wrapFill: { position: 'relative', width: '100%', flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' },
+  viewFill: {
+    flex: 1, minHeight: 0, width: '100%', overflowY: 'auto',
+    maskImage: 'linear-gradient(180deg, transparent, #000 18%, #000 82%, transparent)',
+    WebkitMaskImage: 'linear-gradient(180deg, transparent, #000 18%, #000 82%, transparent)',
+  },
+  emptyFill: {
+    flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
     color: 'rgba(203,213,225,0.35)', fontSize: 13, letterSpacing: 1,
   },
 }

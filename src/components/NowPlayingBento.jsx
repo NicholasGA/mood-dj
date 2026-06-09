@@ -105,99 +105,99 @@ export default function NowPlayingBento({
 
   return (
     <div style={s.root}>
-      {/* 正在播放（大卡，占满宽）。额外一团 accent 辉光向四周晕染，把卡缝进氛围背景 */}
-      <div style={{ ...heroSurf, ...s.hero, boxShadow: `${heroSurf.boxShadow}, 0 20px 76px -18px color-mix(in srgb, ${accent} 55%, transparent)` }}>
-        <div style={s.heroArtWrap} className={isPlaying ? 'floaty' : ''}>
-          {art ? <img src={art} alt="" style={s.heroArt} draggable={false} />
-               : <div style={{ ...s.heroArt, ...s.ph }}>🎵</div>}
-        </div>
-        <div style={s.heroMid}>
-          <div style={s.heroTitle} title={title}>{title}</div>
-          <div style={s.heroArtist}>{artist}</div>
-          <div style={s.progRow}>
-            <span style={{ ...s.time, ...s.timeBig, color: '#fff' }} className="led">{fmt(progress * dur)}</span>
-            <div ref={barRef} style={s.bar} onPointerDown={onBarDown}>
-              <div style={{ ...s.fill, width: `${progress * 100}%` }} />
-              <div style={{ ...s.knob, left: `${progress * 100}%` }} />
+      <div style={s.body}>
+        {/* 左栏：播放器 + 律动/心情 + 接下来 */}
+        <div style={s.left}>
+          {/* 正在播放（左栏顶，封面更大；accent 辉光晕进背景） */}
+          <div style={{ ...heroSurf, ...s.hero, boxShadow: `${heroSurf.boxShadow}, 0 20px 70px -20px color-mix(in srgb, ${accent} 50%, transparent)` }}>
+            <div style={s.heroArtWrap} className={isPlaying ? 'floaty' : ''}>
+              {art ? <img src={art} alt="" style={s.heroArt} draggable={false} />
+                   : <div style={{ ...s.heroArt, ...s.ph }}>🎵</div>}
             </div>
-            <span style={{ ...s.time, color: 'rgba(255,255,255,0.85)' }} className="led">{fmt(dur)}</span>
+            <div style={s.heroMid}>
+              <div style={s.heroTitle} title={title}>{title}</div>
+              <div style={s.heroArtist}>{artist}</div>
+              <div style={s.progRow}>
+                <span style={{ ...s.time, ...s.timeBig, color: '#fff' }} className="led">{fmt(progress * dur)}</span>
+                <div ref={barRef} style={s.bar} onPointerDown={onBarDown}>
+                  <div style={{ ...s.fill, width: `${progress * 100}%` }} />
+                  <div style={{ ...s.knob, left: `${progress * 100}%` }} />
+                </div>
+                <span style={{ ...s.time, color: 'rgba(255,255,255,0.85)' }} className="led">{fmt(dur)}</span>
+              </div>
+              <div style={s.heroCtrl}>
+                <button style={s.playBtn} onClick={onTogglePlay} title="播放/暂停"><Icon name={isPlaying ? 'pause' : 'play'} size={22} color={accent} filled /></button>
+                <button style={s.nextBtn} onClick={onNext} title="下一首"><Icon name="next" size={17} color="#fff" filled /></button>
+              </div>
+            </div>
+          </div>
+
+          {/* 律动 | 心情 */}
+          <div style={s.leftGrid}>
+            <div style={{ ...vivid(pal.energy, pal.energy, 20), ...s.tile }}>
+              <div style={s.tLabel}>律动</div>
+              <MiniWave analyser={analyser} color={`color-mix(in srgb, ${pal.energy} 50%, #ffffff)`} isPlaying={isPlaying} />
+              <div style={s.tValRow}><span className="led" style={s.tLed}>{Math.round(energy * 100)}</span><span style={s.tUnit}>能量</span></div>
+            </div>
+            <div style={{ ...vivid(accent, accent2, 20), ...s.tile }}>
+              <div style={s.tLabel}>心情</div>
+              <div style={s.moodMain}><span style={s.moodEmoji}>{emoji}</span><span style={s.moodName}>{mood}</span></div>
+              <div style={s.bars}><Bar label="能量" v={energy} /><Bar label="情绪" v={valence} /></div>
+            </div>
+          </div>
+
+          {/* 接下来（撑满左栏剩余高度） */}
+          <div style={{ ...vividDark(pal.next, 20), ...s.tile, flex: 1, cursor: 'pointer' }} onClick={onOpenQueue} title="查看/管理队列">
+            <div style={s.tLabel}>接下来</div>
+            <div style={s.nextRow}>
+              {nextArt ? <img src={nextArt} alt="" style={s.nextThumb} draggable={false} /> : <div style={{ ...s.nextThumb, ...s.ph2 }}>♪</div>}
+              <div style={s.nextInfo}>
+                <div style={s.nextTitle} title={nextTrack?.name}>{nextTrack?.name || '自动续上…'}</div>
+                <div style={s.nextArtist}>{nextTrack?.artists?.map(a => a.name).join(', ') || '无限电台'}</div>
+              </div>
+            </div>
+            <div style={s.dotsRow}>
+              {Array.from({ length: 9 }).map((_, i) => <span key={i} style={{ ...s.dot, opacity: i < dots ? 1 : 0.22 }} />)}
+              <span style={s.queueNum}>{queueCount}</span>
+            </div>
           </div>
         </div>
-        <div style={s.heroCtrl}>
-          <button style={s.playBtn} onClick={onTogglePlay} title="播放/暂停"><Icon name={isPlaying ? 'pause' : 'play'} size={24} color={accent} filled /></button>
-          <button style={s.nextBtn} onClick={onNext} title="下一首"><Icon name="next" size={18} color="#fff" filled /></button>
+
+        {/* 右栏：DJ 故事 + 歌词（撑满高度） */}
+        <div style={s.right}>
+          <div style={{ ...vividDark(pal.dj, 20), ...s.tile }}>
+            <div style={s.tLabel}>DJ · 这首的故事</div>
+            <div style={s.djName}><Icon name="mic" size={13} color="#e9d5ff" /> {djName || '你的电台'}</div>
+            <div style={s.story}>{story || '正在为这首歌写一句话…'}</div>
+          </div>
+          <div style={{ ...vividDark(accent, 20), ...s.lyricTile }}>
+            <div style={s.tLabel}>♪ 歌词</div>
+            <Lyrics fill lines={lyric?.lines || []} hasTrans={lyric?.hasTrans} audioRef={audioRef} accent={accent} />
+          </div>
         </div>
       </div>
 
-      {/* 四块 bento */}
-      <div style={s.grid}>
-        {/* 律动：实时频谱 + LED 能量（亮块，邻近暖移色，最跳） */}
-        <div style={{ ...vivid(pal.energy, pal.energy, 20), ...s.tile }}>
-          <div style={s.tLabel}>律动</div>
-          <MiniWave analyser={analyser} color={`color-mix(in srgb, ${pal.energy} 50%, #ffffff)`} isPlaying={isPlaying} />
-          <div style={s.tValRow}><span className="led" style={s.tLed}>{Math.round(energy * 100)}</span><span style={s.tUnit}>能量</span></div>
-        </div>
-
-        {/* 心情：名字 + emoji + 能量/情绪条 */}
-        <div style={{ ...vivid(accent, accent2, 20), ...s.tile }}>
-          <div style={s.tLabel}>心情</div>
-          <div style={s.moodMain}><span style={s.moodEmoji}>{emoji}</span><span style={s.moodName}>{mood}</span></div>
-          <div style={s.bars}>
-            <Bar label="能量" v={energy} />
-            <Bar label="情绪" v={valence} />
-          </div>
-        </div>
-
-        {/* 接下来：下一首 + 队列点阵（暗块，近补色染色，和亮块拉开色相对比） */}
-        <div style={{ ...vividDark(pal.next, 20), ...s.tile, cursor: 'pointer' }} onClick={onOpenQueue} title="查看/管理队列">
-          <div style={s.tLabel}>接下来</div>
-          <div style={s.nextRow}>
-            {nextArt ? <img src={nextArt} alt="" style={s.nextThumb} draggable={false} /> : <div style={{ ...s.nextThumb, ...s.ph2 }}>♪</div>}
-            <div style={s.nextInfo}>
-              <div style={s.nextTitle} title={nextTrack?.name}>{nextTrack?.name || '自动续上…'}</div>
-              <div style={s.nextArtist}>{nextTrack?.artists?.map(a => a.name).join(', ') || '无限电台'}</div>
-            </div>
-          </div>
-          <div style={s.dotsRow}>
-            {Array.from({ length: 9 }).map((_, i) => <span key={i} style={{ ...s.dot, opacity: i < dots ? 1 : 0.22 }} />)}
-            <span style={s.queueNum}>{queueCount}</span>
-          </div>
-        </div>
-
-        {/* DJ · 这首的故事（暗块，另一侧邻近色染色） */}
-        <div style={{ ...vividDark(pal.dj, 20), ...s.tile }}>
-          <div style={s.tLabel}>DJ · 这首的故事</div>
-          <div style={s.djName}><Icon name="mic" size={13} color="#e9d5ff" /> {djName || '你的电台'}</div>
-          <div style={s.story}>{story || '正在为这首歌写一句话…'}</div>
-        </div>
-      </div>
-
-      {/* 控制条 */}
-      <div style={s.controls}>
+      {/* 底部控制坞（全宽、不随歌词滚动） */}
+      <div style={s.dock}>
         <button style={{ ...s.pill, color: '#f9a8d4', borderColor: '#f472b640' }} onClick={onLike}><Icon name="heart" size={14} color="#f9a8d4" filled /> 喜欢</button>
         <button style={s.pill} onClick={onDislike}><Icon name="thumbsDown" size={14} color="#cbd5e1" /> 不喜欢</button>
         <span style={s.div} />
         <button style={s.pill} onClick={() => onVibe('up')}><Icon name="flame" size={14} color="#fb923c" /> 嗨</button>
         <button style={s.pill} onClick={() => onVibe('down')}><Icon name="moon" size={14} color="#93c5fd" /> 静</button>
         <button style={s.pill} onClick={() => onVibe('flavor')}><Icon name="shuffle" size={14} color="#c4b5fd" /> 换</button>
+        <div style={s.steerWrap}>
+          <span style={s.steerMic}><Icon name="mic" size={15} color="#9ca3af" /></span>
+          <input style={s.steerInput} placeholder="跟 DJ 说…「放点周杰伦但安静的」" value={steerText}
+            onChange={e => setSteerText(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter' && steerText.trim()) { onSteer(steerText.trim()); setSteerText('') } }} />
+          <button style={{ ...s.steerBtn, background: accent, opacity: steerText.trim() ? 1 : 0.5 }} disabled={!steerText.trim()}
+            onClick={() => { if (steerText.trim()) { onSteer(steerText.trim()); setSteerText('') } }}>换</button>
+        </div>
+        <span style={s.volIcon}><Icon name="volume" size={15} color="#9ca3af" /></span>
+        <input type="range" min={0} max={100} value={Math.round(volume * 100)} onChange={e => onVolume?.(Number(e.target.value) / 100)} className="mood-slider" style={{ width: 80, flexShrink: 0 }} />
         <span style={s.div} />
         <button style={s.pill} onClick={onRepick} title="重新选心情/换台"><Icon name="refresh" size={14} color="#9ca3af" /> 换心情</button>
       </div>
-
-      {/* 跟 DJ 说 + 音量 */}
-      <div style={s.steerRow}>
-        <span style={s.steerMic}><Icon name="mic" size={15} color="#9ca3af" /></span>
-        <input style={s.steerInput} placeholder="跟 DJ 说…「放点周杰伦但安静的」" value={steerText}
-          onChange={e => setSteerText(e.target.value)}
-          onKeyDown={e => { if (e.key === 'Enter' && steerText.trim()) { onSteer(steerText.trim()); setSteerText('') } }} />
-        <button style={{ ...s.steerBtn, background: accent, opacity: steerText.trim() ? 1 : 0.5 }} disabled={!steerText.trim()}
-          onClick={() => { if (steerText.trim()) { onSteer(steerText.trim()); setSteerText('') } }}>换</button>
-        <span style={s.volIcon}><Icon name="volume" size={15} color="#9ca3af" /></span>
-        <input type="range" min={0} max={100} value={Math.round(volume * 100)} onChange={e => onVolume?.(Number(e.target.value) / 100)} className="mood-slider" style={{ width: 90 }} />
-      </div>
-
-      {/* 歌词 */}
-      {track && <div style={s.lyricWrap}><Lyrics lines={lyric?.lines || []} hasTrans={lyric?.hasTrans} audioRef={audioRef} accent={accent} /></div>}
     </div>
   )
 }
@@ -212,11 +212,16 @@ function Bar({ label, v }) {
 }
 
 const s = {
-  root: { display: 'flex', flexDirection: 'column', gap: 14 },
+  root: { display: 'flex', flexDirection: 'column', gap: 12, flex: 1, minHeight: 0 },
+  body: { display: 'flex', gap: 14, flex: 1, minHeight: 0 },
+  left: { flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 12 },
+  leftGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 },
+  right: { flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 12 },
+  lyricTile: { flex: 1, minHeight: 0, padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 4 },
 
-  hero: { display: 'flex', alignItems: 'center', gap: 18, padding: '18px 22px' },
+  hero: { display: 'flex', alignItems: 'center', gap: 16, padding: '16px 18px', flexShrink: 0 },
   heroArtWrap: { flexShrink: 0 },
-  heroArt: { width: 92, height: 92, borderRadius: 16, objectFit: 'cover', display: 'block', boxShadow: '0 10px 30px rgba(0,0,0,0.45)' },
+  heroArt: { width: 104, height: 104, borderRadius: 16, objectFit: 'cover', display: 'block', boxShadow: '0 10px 30px rgba(0,0,0,0.45)' },
   ph: { background: 'rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 34 },
   heroMid: { flex: 1, minWidth: 0 },
   heroTitle: { fontSize: 19, fontWeight: 800, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textShadow: '0 1px 8px rgba(0,0,0,0.4)' },
@@ -227,12 +232,11 @@ const s = {
   bar: { position: 'relative', flex: 1, height: 6, background: 'rgba(255,255,255,0.25)', borderRadius: 3, cursor: 'pointer', touchAction: 'none' },
   fill: { position: 'absolute', top: 0, left: 0, height: '100%', borderRadius: 3, background: '#fff', transition: 'width .12s linear' },
   knob: { position: 'absolute', top: '50%', width: 12, height: 12, borderRadius: '50%', transform: 'translate(-50%,-50%)', background: '#fff', boxShadow: '0 0 8px rgba(0,0,0,0.5)' },
-  heroCtrl: { display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 },
-  playBtn: { width: 56, height: 56, borderRadius: '50%', background: '#fff', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 8px 22px rgba(0,0,0,0.35)' },
-  nextBtn: { width: 44, height: 44, borderRadius: '50%', background: 'rgba(255,255,255,0.18)', border: '1px solid rgba(255,255,255,0.3)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' },
+  heroCtrl: { display: 'flex', alignItems: 'center', gap: 10, marginTop: 12 },
+  playBtn: { width: 48, height: 48, borderRadius: '50%', background: '#fff', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 8px 22px rgba(0,0,0,0.35)' },
+  nextBtn: { width: 40, height: 40, borderRadius: '50%', background: 'rgba(255,255,255,0.18)', border: '1px solid rgba(255,255,255,0.3)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' },
 
-  grid: { display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 14 },
-  tile: { padding: '14px 16px', minHeight: 112, display: 'flex', flexDirection: 'column', gap: 8, color: '#fff', position: 'relative' },
+  tile: { padding: '14px 16px', minHeight: 108, display: 'flex', flexDirection: 'column', gap: 8, color: '#fff', position: 'relative' },
   tLabel: { fontSize: 12, fontWeight: 500, color: 'rgba(255,255,255,0.82)', textShadow: '0 1px 4px rgba(0,0,0,0.4)' },
   tValRow: { display: 'flex', alignItems: 'baseline', gap: 5, marginTop: 'auto' },
   tLed: { fontSize: 26, color: '#fff' },
@@ -258,17 +262,15 @@ const s = {
   queueNum: { marginLeft: 'auto', fontSize: 13, fontWeight: 700, color: '#bae6fd' },
 
   djName: { fontSize: 12.5, fontWeight: 600, color: '#e9d5ff', display: 'inline-flex', alignItems: 'center', gap: 5, marginTop: 2 },
-  story: { fontSize: 13, color: 'rgba(245,240,255,0.92)', lineHeight: 1.5, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical' },
+  story: { fontSize: 13, color: 'rgba(245,240,255,0.92)', lineHeight: 1.55, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 4, WebkitBoxOrient: 'vertical' },
 
-  controls: { display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'center' },
-  pill: { display: 'inline-flex', alignItems: 'center', gap: 5, padding: '7px 12px', borderRadius: 16, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', color: '#e5e7eb', fontSize: 12.5, cursor: 'pointer', whiteSpace: 'nowrap' },
+  // 底部控制坞：把分散的喜欢/调味/对话/音量/换心情收成一条，全宽常驻
+  dock: { display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', flexShrink: 0, paddingTop: 2 },
+  pill: { display: 'inline-flex', alignItems: 'center', gap: 5, padding: '8px 12px', borderRadius: 14, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', color: '#e5e7eb', fontSize: 12.5, cursor: 'pointer', whiteSpace: 'nowrap' },
   div: { width: 1, height: 18, background: 'rgba(255,255,255,0.14)', margin: '0 2px' },
-
-  steerRow: { display: 'flex', gap: 8, alignItems: 'center', position: 'relative' },
+  steerWrap: { position: 'relative', flex: 1, minWidth: 200, display: 'flex', alignItems: 'center', gap: 6 },
   steerMic: { position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', display: 'flex' },
   steerInput: { flex: 1, minWidth: 0, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 12, padding: '9px 12px 9px 34px', color: '#f9fafb', fontSize: 13, outline: 'none' },
-  steerBtn: { flexShrink: 0, padding: '0 16px', height: 36, borderRadius: 12, border: 'none', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer' },
+  steerBtn: { flexShrink: 0, padding: '0 15px', height: 36, borderRadius: 12, border: 'none', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer' },
   volIcon: { display: 'flex', flexShrink: 0, marginLeft: 4 },
-
-  lyricWrap: { marginTop: 2 },
 }
