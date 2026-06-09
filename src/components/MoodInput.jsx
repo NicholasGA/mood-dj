@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import Icon from './Icon'
-import { glass } from '../ui/surface'
+import { vivid, tintedGlass } from '../ui/surface'
 
 // 按当前时段 + 工作日/周末给出情境推荐
 function getContextSuggestion(d = new Date()) {
@@ -57,7 +57,7 @@ export default function MoodInput({ onStart, isLoading, isActive, moodConfig, ta
   const accent = moodConfig?.color_primary || '#7c3aed'
 
   return (
-    <div style={styles.panel} className="fade-up">
+    <div style={{ ...tintedGlass(accent, 26), ...styles.panel }} className="fade-up">
       <h2 style={styles.heading}>今日心情</h2>
 
       {taste?.personality && (
@@ -82,8 +82,8 @@ export default function MoodInput({ onStart, isLoading, isActive, moodConfig, ta
 
       <div style={styles.presets} className="stagger">
         {PRESET_MOODS.map(p => (
-          <button key={p.label} style={styles.preset} onClick={() => applyPreset(p)}>
-            <Icon name={p.icon} size={22} color={p.color} filled={p.filled} strokeWidth={2.2} />
+          <button key={p.label} style={{ ...vivid(p.color, p.color, 18), ...styles.preset }} onClick={() => applyPreset(p)}>
+            <Icon name={p.icon} size={24} color="#fff" filled={p.filled} strokeWidth={2.3} />
             <span style={styles.presetLabel}>{p.label}</span>
           </button>
         ))}
@@ -151,10 +151,7 @@ function SliderRow({ label, leftTip, rightTip, value, onChange, accent }) {
 }
 
 const styles = {
-  panel: {
-    ...glass, borderRadius: 22,
-    padding: 26, display: 'flex', flexDirection: 'column', gap: 16,
-  },
+  panel: { padding: 26, display: 'flex', flexDirection: 'column', gap: 16 },
   heading: { fontSize: 18, fontWeight: 700, color: '#f9fafb', margin: 0 },
   taste: { display: 'flex', alignItems: 'center', gap: 7, marginTop: -8, fontSize: 12.5, color: '#cbd5e1', fontWeight: 500, lineHeight: 1.4 },
   tasteText: { opacity: 0.92 },
@@ -164,14 +161,12 @@ const styles = {
   suggestLabel: { fontSize: 11, color: '#9ca3af', marginBottom: 2, letterSpacing: 0.5 },
   suggestText: { fontSize: 13, color: '#f3f4f6', fontWeight: 500, lineHeight: 1.3 },
   suggestBtn: { flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 5, padding: '8px 13px', borderRadius: 10, border: 'none', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' },
-  presets: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 },
+  presets: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 },
   preset: {
-    background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)',
-    borderRadius: 10, padding: '8px 4px', cursor: 'pointer', color: '#e5e7eb',
-    fontSize: 12, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
-    transition: 'background .15s',
+    padding: '15px 6px', cursor: 'pointer', color: '#fff',
+    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 7,
   },
-  presetLabel: { fontSize: 11, color: '#9ca3af' },
+  presetLabel: { fontSize: 12, color: 'rgba(255,255,255,0.95)', fontWeight: 600, textShadow: '0 1px 5px rgba(0,0,0,0.45)' },
   textarea: {
     background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
     borderRadius: 12, padding: '12px 14px', color: '#f9fafb', fontSize: 14,

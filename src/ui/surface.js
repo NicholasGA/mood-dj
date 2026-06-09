@@ -32,6 +32,31 @@ export const glassPill = {
   boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.14), 0 16px 40px -12px rgba(0,0,0,0.72)',
 }
 
+// 鲜艳渐变玻璃方块（参考霓虹 bento 风格）：一个色相的发光渐变 + 大圆角 + 同色辉光 + 顶部高光。
+// 透明窗口下没法真模糊，所以用"饱和渐变 + 辉光 + 半透明"还原玻璃质感。
+export function vivid(c1, c2 = c1, radius = 22) {
+  return {
+    background: `radial-gradient(135% 135% at 26% 16%, ${c1} 0%, ${c2} 58%, color-mix(in srgb, ${c2} 62%, #0a0a0f) 100%)`,
+    borderRadius: radius,
+    border: '1px solid rgba(255,255,255,0.18)',
+    boxShadow: [
+      'inset 0 1px 0 rgba(255,255,255,0.32)',                                   // 顶部高光：玻璃吃光
+      'inset 0 -20px 36px -22px rgba(0,0,0,0.55)',                              // 底部内阴影：弧面厚度
+      `0 16px 38px -16px color-mix(in srgb, ${c1} 60%, transparent)`,           // 远处同色柔阴影
+      `0 0 26px -4px color-mix(in srgb, ${c1} 48%, transparent)`,               // 同色辉光
+    ].join(', '),
+  }
+}
+
+// 深色卡叠一层心情/专辑色的渐变染色（密集文字卡用：够读，又有参考图的彩味）
+export function tintedGlass(accent, radius = 26) {
+  return {
+    ...glass, borderRadius: radius,
+    background: `radial-gradient(120% 80% at 50% -10%, color-mix(in srgb, ${accent} 26%, transparent) 0%, transparent 58%), ${glass.background}`,
+    boxShadow: `${glass.boxShadow}, 0 0 30px -10px color-mix(in srgb, ${accent} 40%, transparent)`,
+  }
+}
+
 // 给某张卡片叠一层专辑/心情色的微光（可选，传 accent 进来更有氛围、更统一）
 export const accentGlow = (accent) =>
   accent ? { boxShadow: `${glass.boxShadow}, 0 0 0 1px color-mix(in srgb, ${accent} 14%, transparent), 0 18px 50px -24px color-mix(in srgb, ${accent} 45%, transparent)` } : null
