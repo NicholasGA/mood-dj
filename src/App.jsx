@@ -99,11 +99,11 @@ export default function App() {
     }).catch(() => {})
   }, [])
 
-  // 载入应用配置（API key 等），覆盖默认值
+  // 载入应用配置（API key 等），覆盖默认值。onboarded=用户已走过引导(哪怕没填 key，用本地兜底)
   useEffect(() => {
     window.electronAPI.getConfig().then(cfg => {
       if (cfg) configureLLM(cfg)
-      setLlmReady(hasLLMKey())
+      setLlmReady(hasLLMKey() || !!cfg?.onboarded)
     }).catch(() => setLlmReady(hasLLMKey()))
   }, [])
 

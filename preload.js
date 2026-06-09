@@ -12,6 +12,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   addQQFavorite:       (songId) => ipcRenderer.invoke('qq-add-favorite', songId),
   createQQPlaylist:    (name) => ipcRenderer.invoke('qq-create-playlist', name),
   addSongsToQQPlaylist:(dirId, songIds) => ipcRenderer.invoke('qq-add-songs', dirId, songIds),
+  openrouterOAuth:     () => ipcRenderer.invoke('openrouter-oauth'),
   getMemory:           () => ipcRenderer.invoke('get-memory'),
   storeMemory:         (v) => ipcRenderer.invoke('store-memory', v),
   getConfig:           () => ipcRenderer.invoke('get-config'),

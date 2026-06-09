@@ -38,9 +38,23 @@ export default function Onboarding({ qqCookies, onQQAuth, onReady, onClose, canC
     setTimeout(() => setSaved(false), 1800)
   }
 
+  // OpenRouter 一键授权（PKCE，主进程弹窗代办）→ 自动回填 key，免去注册→建key→复制→粘贴
+  async function connectOpenRouter() {
+    setErr('')
+    try {
+      const key = await window.electronAPI.openrouterOAuth()
+      if (!key) { setErr('OpenRouter 连接已取消'); return }
+      setOpenrouterKey(key)
+      const cfg = { geminiKey: geminiKey.trim(), openrouterKey: key, onboarded: true }
+      await window.electronAPI.storeConfig(cfg); configureLLM(cfg)
+      setSaved(true); setTimeout(() => setSaved(false), 1800)
+    } catch (e) { setErr('OpenRouter 连接失败：' + e.message) }
+  }
+
   function finish() {
-    if (!hasLLMKey()) configureLLM({ geminiKey: geminiKey.trim(), openrouterKey: openrouterKey.trim() })
-    window.electronAPI.storeConfig({ geminiKey: geminiKey.trim(), openrouterKey: openrouterKey.trim() })
+    const cfg = { geminiKey: geminiKey.trim(), openrouterKey: openrouterKey.trim(), onboarded: true }
+    configureLLM(cfg)
+    window.electronAPI.storeConfig(cfg)
     onReady?.()
     onClose?.()
   }
@@ -71,17 +85,20 @@ export default function Onboarding({ qqCookies, onQQAuth, onReady, onClose, canC
         <div style={s.step}>
           <div style={s.stepHead}>
             <span style={{ ...s.dot, background: keyDone ? '#31c27c' : 'rgba(255,255,255,0.15)' }}>{keyDone ? '✓' : '2'}</span>
-            <span style={s.stepTitle}>配置 AI（Gemini）</span>
+            <span style={s.stepTitle}>配置 AI（可选）</span>
           </div>
           <p style={s.hint}>
-            用于分析心情、AI 选歌、DJ 串场。免费申请，1 分钟搞定。
-            <span style={s.link} onClick={() => open('https://aistudio.google.com/apikey')}>　去免费获取 Key →</span>
+            填了才有「AI 分析心情 / 智能选歌 / 基于歌词的歌曲介绍」；<b style={{ color: '#cbd5e1' }}>不填也能用</b>——这些会用本地兜底，随时能回设置里补。
           </p>
-          <input style={s.input} type="password" placeholder="粘贴 Gemini API Key（多个用逗号分隔）"
-            value={geminiKey} onChange={e => setGeminiKey(e.target.value)} />
+          <button style={{ ...s.btn, padding: '11px 0', background: 'linear-gradient(135deg,#7c3aed,#4f46e5)', marginBottom: 8 }} onClick={connectOpenRouter}>
+            🔗 一键连接 OpenRouter（中文介绍更稳 · 免复制粘贴）
+          </button>
           <details style={s.adv}>
-            <summary style={s.advSum}>高级（可选）：OpenRouter 兜底</summary>
-            <p style={s.hint}>所有 Gemini key 限流后用它兜底。<span style={s.link} onClick={() => open('https://openrouter.ai/keys')}>免费获取 →</span></p>
+            <summary style={s.advSum}>或手动填 key（Gemini / OpenRouter）</summary>
+            <p style={s.hint}>Gemini：<span style={s.link} onClick={() => open('https://aistudio.google.com/apikey')}>免费获取 →</span></p>
+            <input style={s.input} type="password" placeholder="Gemini API Key（多个逗号分隔，可留空）"
+              value={geminiKey} onChange={e => setGeminiKey(e.target.value)} />
+            <p style={s.hint}>OpenRouter：<span style={s.link} onClick={() => open('https://openrouter.ai/keys')}>免费获取 →</span></p>
             <input style={s.input} type="password" placeholder="OpenRouter API Key（可留空）"
               value={openrouterKey} onChange={e => setOpenrouterKey(e.target.value)} />
           </details>
@@ -92,9 +109,9 @@ export default function Onboarding({ qqCookies, onQQAuth, onReady, onClose, canC
         </div>
 
         <button
-          style={{ ...s.btn, marginTop: 6, background: (qqDone && keyDone) ? 'linear-gradient(135deg,#7c3aed,#4f46e5)' : '#374151', cursor: (qqDone && keyDone) ? 'pointer' : 'not-allowed' }}
-          onClick={() => (qqDone && keyDone) && finish()} disabled={!(qqDone && keyDone)}>
-          {canClose ? '保存并返回' : '开始使用 →'}
+          style={{ ...s.btn, marginTop: 6, background: qqDone ? 'linear-gradient(135deg,#7c3aed,#4f46e5)' : '#374151', cursor: qqDone ? 'pointer' : 'not-allowed' }}
+          onClick={() => qqDone && finish()} disabled={!qqDone}>
+          {canClose ? '保存并返回' : (keyDone ? '开始使用 →' : '先用着（不填 key 也行）→')}
         </button>
 
         <p style={s.foot}>

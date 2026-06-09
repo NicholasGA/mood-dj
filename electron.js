@@ -2,6 +2,7 @@ const { app, BrowserWindow, ipcMain, net, protocol, screen, shell } = require('e
 const path = require('path')
 const fs = require('fs')
 const { autoUpdater } = require('electron-updater')
+const crypto = require('crypto')
 const { qqSign } = require('./qqSign.cjs')
 
 // 主进程日志落盘，方便排查（dev 下 concurrently 会吞掉 stdout）
@@ -116,6 +117,38 @@ function setupAutoUpdate() {
   autoUpdater.checkForUpdates().catch(e => dlog('[update] check failed', e.message))
 }
 ipcMain.handle('install-update', () => { autoUpdater.quitAndInstall() })
+
+// ── OpenRouter 一键授权（PKCE）：弹窗登录授权 → 自动换取 API key ────
+ipcMain.handle('openrouter-oauth', () => new Promise((resolve) => {
+  const b64url = (buf) => buf.toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+  const verifier = b64url(crypto.randomBytes(32))
+  const challenge = b64url(crypto.createHash('sha256').update(verifier).digest())
+  const CB = 'http://localhost/mooddj-openrouter-callback'   // 不会真加载，靠 will-redirect 拦截取 code
+  const authUrl = `https://openrouter.ai/auth?callback_url=${encodeURIComponent(CB)}&code_challenge=${challenge}&code_challenge_method=S256`
+  let settled = false
+  const popup = new BrowserWindow({ width: 460, height: 720, parent: mainWindow, webPreferences: { nodeIntegration: false, contextIsolation: true } })
+  popup.setTitle('连接 OpenRouter — 登录并点击授权')
+  const finish = (key) => { if (settled) return; settled = true; if (!popup.isDestroyed()) popup.close(); resolve(key || null) }
+  const onCallback = async (url) => {
+    try {
+      const code = new URL(url).searchParams.get('code')
+      if (!code) return finish(null)
+      const res = await net.fetch('https://openrouter.ai/api/v1/auth/keys', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code, code_verifier: verifier, code_challenge_method: 'S256' }),
+      })
+      const j = await res.json().catch(() => ({}))
+      dlog('[or-oauth]', res.status, j.key ? 'got key' : 'no key')
+      finish(j.key || null)
+    } catch (e) { dlog('[or-oauth] error', e.message); finish(null) }
+  }
+  const guard = (e, url) => { if (url && url.startsWith(CB)) { e.preventDefault(); onCallback(url) } }
+  popup.webContents.on('will-redirect', guard)
+  popup.webContents.on('will-navigate', guard)
+  popup.on('closed', () => finish(null))
+  popup.loadURL(authUrl)
+  setTimeout(() => finish(null), 5 * 60 * 1000)
+}))
 
 // ── QQ Music auth via cookie capture ──────────────────────────────
 ipcMain.handle('qq-auth', () => {
