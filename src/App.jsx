@@ -32,9 +32,8 @@ export default function App() {
   const [albumColors, setAlbumColors] = useState(null)
   const [lyric, setLyric] = useState({ lines: [], choruses: [], hasTrans: false })
   const [miniMode, setMiniMode] = useState(false)
-  const [dockMode, setDockMode] = useState(false)        // 壁龛模式：贴右边缘的常驻竖条
+  const [dockMode, setDockMode] = useState(false)        // 壁龛模式：可拖动的悬浮唱片球
   const [dockExpanded, setDockExpanded] = useState(false)
-  const dockHoverRef = useRef(null)
   const [favCount, setFavCount] = useState(0)   // 已接入的 QQ收藏数（仅用于 UI 提示）
   const [likedCount, setLikedCount] = useState(0)   // 本地喜欢数量（喂口味，不再单独展示面板）
   const [tasteProfile, setTasteProfile] = useState(null)   // AI 音乐画像，无感呈现在主界面
@@ -588,19 +587,15 @@ export default function App() {
     setMiniMode(on)
   }
 
-  // 壁龛模式：进/出 + hover 展开（防抖：离开时略等，避免补间过程边缘抖动误收起）
+  // 壁龛模式：进/出；点击悬浮球展开/收起（主进程改窗尺寸，渲染层 CSS 缩放）
   function toggleDock(on) {
     window.electronAPI.setDock?.(on)
     setDockMode(on)
     if (!on) setDockExpanded(false)
   }
-  function onDockHover(expand) {
-    clearTimeout(dockHoverRef.current)
-    if (expand) {
-      setDockExpanded(true); window.electronAPI.dockResize?.(true)
-    } else {
-      dockHoverRef.current = setTimeout(() => { setDockExpanded(false); window.electronAPI.dockResize?.(false) }, 120)
-    }
+  function onDockToggle(expand) {
+    setDockExpanded(expand)
+    window.electronAPI.dockExpand?.(expand)
   }
 
   // 播放中实时调味：把新 vibe 的歌插到队首，立即生效（不重开台、不耗 Gemini）
@@ -781,13 +776,13 @@ export default function App() {
     )
   }
 
-  // 壁龛模式：贴右边缘的常驻竖条（透明窗口，背景留空透出桌面）
+  // 壁龛模式：可拖动的悬浮唱片球，点击展开成播放面板
   if (dockMode) {
     return (
       <NicheDock
         track={currentTrack} isPlaying={isPlaying} audioRef={audioRef}
         accent={accent} accent2={accent2} lyric={lyric}
-        expanded={dockExpanded} onHover={onDockHover}
+        expanded={dockExpanded} onToggle={onDockToggle}
         onTogglePlay={togglePlay} onNext={playNext} onVibe={adjustVibe}
         onExit={() => toggleDock(false)} onClose={() => window.electronAPI.close()}
       />

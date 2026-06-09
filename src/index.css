@@ -90,6 +90,12 @@ input:focus, textarea:focus {
 @keyframes floaty { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-7px); } }
 .floaty { animation: floaty 5s ease-in-out infinite; }
 
+/* 壁龛：球/面板的平滑出现（窗口已先改好尺寸，这里只缩放内容，避免补间抖动） */
+@keyframes dockOrbIn { from { opacity: 0; transform: scale(.6); } to { opacity: 1; transform: scale(1); } }
+.dock-orb-in { animation: dockOrbIn .22s cubic-bezier(.22,.61,.36,1) both; }
+@keyframes dockPanelIn { from { opacity: 0; transform: scale(.72); } to { opacity: 1; transform: scale(1); } }
+.dock-panel-in { animation: dockPanelIn .26s cubic-bezier(.22,.61,.36,1) both; }
+
 /* 呼吸感：极缓的明暗+缩放脉动，周期由 --breath 控制（能量越高越快）。
    只动 opacity/transform，GPU 友好；prefers-reduced-motion 下停掉。 */
 @keyframes breathe {

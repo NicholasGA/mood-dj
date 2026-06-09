@@ -477,25 +477,28 @@ ipcMain.handle('set-mini', (_e, on) => {
   } catch (e) { dlog('[mini] error', e.message) }
 })
 
-// ── 壁龛模式：贴右边缘的常驻竖条，hover 展开（动效靠宽度补间）──────────
+// ── 壁龛模式：可自由拖动的悬浮球，点击展开成播放面板 ───────────────────
+// 小窗不占满屏 → 不触发分辨率 OSD；展开靠"一次性改窗尺寸 + 渲染层 CSS 缩放"→ 平滑不补间。
 let dockPrevBounds = null
-let dockTween = null
-const DOCK_COLLAPSED = 76
-const DOCK_EXPANDED = 372
-function dockBounds(width) {
+const ORB = 152, PANEL_W = 348, PANEL_H = 476
+function clampToWorkArea(b, margin = 12) {
   const wa = screen.getPrimaryDisplay().workArea
-  return { x: wa.x + wa.width - width, y: wa.y, width: Math.round(width), height: wa.height }   // 右缘锚定，向左生长
+  return {
+    width: b.width, height: b.height,
+    x: Math.max(wa.x + margin, Math.min(Math.round(b.x), wa.x + wa.width - b.width - margin)),
+    y: Math.max(wa.y + margin, Math.min(Math.round(b.y), wa.y + wa.height - b.height - margin)),
+  }
 }
 ipcMain.handle('set-dock', (_e, on) => {
   if (!mainWindow) return
   try {
-    if (dockTween) { clearInterval(dockTween); dockTween = null }
     if (on) {
       dockPrevBounds = mainWindow.getBounds()
       if (mainWindow.isMaximized()) mainWindow.unmaximize()
-      mainWindow.setMinimumSize(DOCK_COLLAPSED, 240)
+      const wa = screen.getPrimaryDisplay().workArea
+      mainWindow.setMinimumSize(ORB, ORB)
       mainWindow.setResizable(true)        // dock 期间保持可 setBounds（Win 坑：false 时 setBounds 不生效）
-      mainWindow.setBounds(dockBounds(DOCK_COLLAPSED))
+      mainWindow.setBounds({ x: wa.x + wa.width - ORB - 30, y: wa.y + wa.height - ORB - 30, width: ORB, height: ORB })  // 默认右下角
       mainWindow.setAlwaysOnTop(true, 'floating')
       mainWindow.show()
       dlog('[dock] ON')
@@ -510,16 +513,20 @@ ipcMain.handle('set-dock', (_e, on) => {
     }
   } catch (e) { dlog('[dock] error', e.message) }
 })
-ipcMain.handle('dock-resize', (_e, expand) => {
+// 展开/收起：保持中心不变地一次性改尺寸（内容动画交给 CSS），并夹进工作区不出屏
+ipcMain.handle('dock-expand', (_e, expand) => {
   if (!mainWindow) return
-  const target = expand ? DOCK_EXPANDED : DOCK_COLLAPSED
-  if (dockTween) { clearInterval(dockTween); dockTween = null }
-  dockTween = setInterval(() => {
-    let w = mainWindow.getBounds().width
-    w += (target - w) * 0.34                          // 指数缓动，约 150ms 到位
-    if (Math.abs(target - w) < 2) { w = target; clearInterval(dockTween); dockTween = null }
-    try { mainWindow.setBounds(dockBounds(w)) } catch {}
-  }, 16)
+  try {
+    const b = mainWindow.getBounds()
+    const cx = b.x + b.width / 2, cy = b.y + b.height / 2
+    const width = expand ? PANEL_W : ORB, height = expand ? PANEL_H : ORB
+    mainWindow.setBounds(clampToWorkArea({ x: cx - width / 2, y: cy - height / 2, width, height }))
+  } catch (e) { dlog('[dock] expand error', e.message) }
+})
+// 拖动：按鼠标位移挪窗（渲染层区分点击/拖动）
+ipcMain.handle('dock-move', (_e, dx, dy) => {
+  if (!mainWindow) return
+  try { const b = mainWindow.getBounds(); mainWindow.setBounds(clampToWorkArea({ ...b, x: b.x + dx, y: b.y + dy })) } catch {}
 })
 
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit() })
