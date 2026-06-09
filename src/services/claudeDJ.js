@@ -1,5 +1,14 @@
+import { personaSystemPrefix, localPersona } from './djPersona.js'
+
 // 运行时可配置（打包分发后由用户在应用内填写）；.env 仅作开发默认值
 export const splitKeys = (s) => (s || '').split(',').map(x => x.trim()).filter(Boolean)
+
+// 固定 DJ 人格（护城河）：生成一次后由 App 持久化并在启动时 configurePersona 回填。
+// 注入到所有 DJ 口吻 prompt 的 system 前缀里，使开场/串场/故事都出自同一个人。
+let PERSONA = null
+export function configurePersona(p) { if (p?.name) PERSONA = p }
+export function getPersona() { return PERSONA }
+const withPersona = (system) => { const pre = personaSystemPrefix(PERSONA); return pre ? `${pre}\n${system}` : system }
 let GEMINI_KEYS = splitKeys(import.meta.env.VITE_GEMINI_API_KEY)
 let MODEL = import.meta.env.VITE_GEMINI_MODEL || 'gemini-2.5-flash-lite'
 let OPENROUTER_KEY = import.meta.env.VITE_OPENROUTER_API_KEY || ''
@@ -127,7 +136,7 @@ async function gemini(system, userMsg, { maxTokens = 600, temperature = 0.9, kin
 export async function analyzeMood(text, energy, valence, platform = 'qq') {
   const isQQ = platform === 'qq'
   const lang = isQQ ? '中文（QQ音乐里真实会搜的关键词）' : '英文'
-  const system = `你是资深音乐编辑和情绪分析师，懂各种曲风/年代/场景。只输出JSON，不要任何其他文字。`
+  const system = withPersona(`你是资深音乐编辑和情绪分析师，懂各种曲风/年代/场景。只输出JSON，不要任何其他文字。其中 dj_intro 要用你这个 DJ 一贯的口吻。`)
 
   const raw = await gemini(system, `
 用户心情描述: "${text}"
@@ -179,7 +188,7 @@ export function localInterpret(text) {
 // 解析对话点歌请求 → 歌手 / 关键词 / 心情（AI 优先，失败回退本地解析）
 export async function interpretRequest(text) {
   try {
-    const system = `你解析用户的点歌/换歌请求，只输出JSON，不要解释。`
+    const system = withPersona(`你解析用户的点歌/换歌请求，只输出JSON，不要解释。其中 dj_intro 用你这个 DJ 一贯的口吻回应。`)
     const raw = await gemini(system, `
 用户说："${text}"
 解析其意图，返回JSON：
@@ -263,13 +272,42 @@ ${list}
   return { personality: j.personality || '', genres: j.genres || [], moods: j.moods || [], artists: j.artists || [], explore: j.explore || '' }
 }
 
+// 专属 DJ 人格：据口味生成一位有名字/调性/口头禅的固定 DJ。一次性调用，调用方持久化复用→几乎不增 API。
+// 走 kind:'story'（优先 OpenRouter，不烧 Gemini 核心额度）；AI 不可用就用本地人格（按口味确定性选）。
+export async function generatePersona(taste = {}) {
+  const arts = (taste.artists || taste.likedArtists || []).slice(0, 8)
+  const genres = (taste.genres || []).slice(0, 5)
+  if (!arts.length && !genres.length) return localPersona(taste)   // 没口味信号 → 本地默认人格
+  try {
+    const system = `你为一个私人音乐电台塑造一位固定 DJ 的人设。只输出JSON，不要解释。`
+    const raw = await gemini(system, `
+听众常听的歌手：${arts.join('、') || '未知'}
+偏好曲风：${genres.join('、') || '未知'}
+
+为这位听众量身设计一个会长期陪他听歌的电台 DJ，贴合上面的口味气质。返回JSON：
+{
+  "name": "DJ 名字(2-4字中文名或英文名，好记有个性)",
+  "vibe": "一句话人设/调性(≤30字，说清说话风格与偏爱的音乐气质)",
+  "sign": "口头禅/收尾语(≤10字)",
+  "emoji": "单个emoji"
+}`, { maxTokens: 300, temperature: 0.9, kind: 'story' })
+    const mm = raw.match(/\{[\s\S]*\}/)
+    if (!mm) throw new Error('persona failed')
+    const j = JSON.parse(mm[0])
+    if (!j.name) throw new Error('no name')
+    return { name: String(j.name).slice(0, 8), vibe: (j.vibe || '').slice(0, 40), sign: (j.sign || '').slice(0, 12), emoji: j.emoji || '🎧', source: 'ai' }
+  } catch {
+    return localPersona(taste)   // 限流/失败 → 本地人格兜底
+  }
+}
+
 // 单首歌一句话「故事」：结合歌词点出情绪/主题/创作背景。调用方按 mid 永久缓存复用 → 省配额
 export async function generateStory(track, lyricSnippet = '', taste = {}) {
   const artist = track?.artists?.map(a => a.name).join('/') || '未知'
   const tasteHint = taste.likedArtists?.length && taste.likedArtists.includes(track?.artists?.[0]?.name)
     ? '（这是听众钟爱的歌手，可自然点一下）' : ''
   const lyricBlock = lyricSnippet ? `\n部分歌词：\n${lyricSnippet}` : '\n（暂无歌词，可讲风格/情绪）'
-  const system = `你是博学、有洞察的音乐电台DJ。只输出一句话，不换行、不解释、不加引号。`
+  const system = withPersona(`你是博学、有洞察的音乐电台DJ。只输出一句话，不换行、不解释、不加引号。`)
   const text = await gemini(system, `
 歌曲：${track?.name} - ${artist}${tasteHint}${lyricBlock}
 

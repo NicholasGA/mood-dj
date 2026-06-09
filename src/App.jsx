@@ -7,8 +7,9 @@ import DJAnnouncement from './components/DJAnnouncement'
 import MiniPlayer from './components/MiniPlayer'
 import Icon from './components/Icon'
 import { searchTracks, getSongUrl, getLyric, searchPlaylists, getPlaylistTracks, searchByArtist } from './services/qqMusicApi'
-import { analyzeMood, generateStory, curateTracks, interpretRequest, configureLLM, hasLLMKey, analyzeTaste } from './services/claudeDJ'
+import { analyzeMood, generateStory, curateTracks, interpretRequest, configureLLM, hasLLMKey, analyzeTaste, generatePersona, configurePersona, getPersona } from './services/claudeDJ'
 import { localStory, localMoodConfig } from './services/djText'
+import { greeting, localPersona, vibeReaction } from './services/djPersona'
 import { freshen, pushRecent, removeAt, moveToFront, pushHistory } from './services/radio'
 import QueuePanel from './components/QueuePanel'
 import { keyToAction } from './services/shortcuts'
@@ -145,6 +146,34 @@ export default function App() {
       })
       .catch(() => { const l = local(); if (l) setTasteProfile(l) })   // AI 不可用(配额/网络) → 本地兜底，不持久化，下次有配额再生成真画像
   }, [favCount, qqCookies, tasteProfile])
+
+  // 固定 DJ 人格（护城河：会记得你的 DJ）：持久化命中→回填；否则据口味生成一次并存住。
+  // 本地人格立刻兜底保证一定有"人"，AI 真人格成功才覆盖持久化（留余地以后升级）。
+  useEffect(() => {
+    const mem = memoryRef.current
+    if (mem.djPersona?.name) { configurePersona(mem.djPersona); return }
+    const arts = [...new Set([...(favRef.current?.topArtists || []), ...likedArtists()])]
+    const seed = tasteProfile || (arts.length ? { artists: arts } : null)
+    configurePersona(localPersona(seed || []))   // 立刻有人格可用
+    if (!seed) return                            // 还没口味信号 → 先用默认，不持久化
+    generatePersona(seed).then(p => {
+      if (p?.name && p.source === 'ai') { mem.djPersona = p; saveMemory(); configurePersona(p) }
+      else if (p?.name) configurePersona(p)      // 本地人格：用但不持久化，等有 API 再生成真人格
+    }).catch(() => {})
+  }, [tasteProfile, favCount])
+
+  // 启动问候（本地，零 API）：人格 + 时段 + 上次到访 → 一句"会记得你"的开场。进主界面一次。
+  const greetedRef = useRef(false)
+  useEffect(() => {
+    if (greetedRef.current || !qqCookies || !llmReady) return
+    greetedRef.current = true
+    const mem = memoryRef.current
+    const persona = getPersona() || localPersona([])
+    const line = greeting(persona, Date.now(), mem.lastSeen || null)
+    mem.lastSeen = Date.now(); saveMemory()
+    setAnnouncement(line); setShowAnnouncement(true)
+    setTimeout(() => setShowAnnouncement(false), 5200)
+  }, [qqCookies, llmReady])
 
   // 全局键盘快捷键：空格 播放/暂停、→ 下一首、← 快退5s、↑↓ 音量、L 喜欢、M 静音（输入框内不拦截）
   useEffect(() => {
@@ -563,7 +592,11 @@ export default function App() {
         queueRef.current = picked                            // 嗨/静：替换接下来的队列，下一首起明显变味
       }
       setQueue(queueRef.current)
-      showToast(v.toast)
+      // DJ 出声反应（文字、不出声 → 不打扰音乐）：让换味道像"人"在回应你
+      const dir = mode === 'up' ? 'energetic' : mode === 'down' ? 'chill' : 'default'
+      setDjSpeak(false)
+      setAnnouncement(vibeReaction(getPersona(), dir)); setShowAnnouncement(true)
+      setTimeout(() => setShowAnnouncement(false), 3200)
     } finally { setLoadingTrack(false) }
   }
 
