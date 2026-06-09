@@ -289,12 +289,20 @@ export default function NowPlayingBento({
 // 心情仪表条：暗槽内嵌 + accent 渐变辉光填充 + 发光游标 + LED 读数（和「律动」一个质感）
 function MoodGauge({ label, v, accent, onCommit }) {
   const trackRef = useRef(null)
+  const cancelRef = useRef(false)
   const [drag, setDrag] = useState(null)   // 拖动时的实时比例（覆盖显示），松手后落定再清空
   const [hover, setHover] = useState(false)
+  const [editing, setEditing] = useState(false)  // 点数字 → 直接输入
+  const [editVal, setEditVal] = useState('')
   const cur = drag != null ? drag : (v || 0)
   const pct = Math.max(0, Math.min(100, Math.round(cur * 100)))
   const dragging = drag != null
   const emph = (hover || dragging) && !!onCommit   // 悬停或拖动 → 放大圆点/加粗轨道，提示可拖
+  const commitEdit = () => {
+    const n = Math.max(0, Math.min(100, parseInt(editVal, 10) || 0))
+    setEditing(false)
+    onCommit?.(n / 100)
+  }
   const ratioFromEvent = (e) => {
     const r = trackRef.current.getBoundingClientRect()
     return Math.min(1, Math.max(0, (e.clientX - r.left) / r.width))
@@ -329,7 +337,28 @@ function MoodGauge({ label, v, accent, onCommit }) {
           ...(emph ? { width: 14, height: 14 } : null),
           boxShadow: `0 0 8px color-mix(in srgb, ${accent} 70%, #ffffff), 0 1px 3px rgba(0,0,0,0.6)${emph ? `, 0 0 0 4px color-mix(in srgb, ${accent} 26%, transparent)` : ''}` }} />
       </div>
-      <span className="led" style={s.gVal}>{pct}</span>
+      {editing ? (
+        <input
+          autoFocus
+          inputMode="numeric"
+          value={editVal}
+          onChange={e => setEditVal(e.target.value.replace(/[^0-9]/g, '').slice(0, 3))}
+          onFocus={e => e.target.select()}
+          onKeyDown={e => {
+            if (e.key === 'Enter') e.target.blur()                              // 触发 onBlur 提交
+            else if (e.key === 'Escape') { cancelRef.current = true; e.target.blur() }
+          }}
+          onBlur={() => { if (cancelRef.current) { cancelRef.current = false; setEditing(false) } else commitEdit() }}
+          style={{ ...s.gValInput, borderColor: accent }}
+        />
+      ) : (
+        <span
+          className="led"
+          style={{ ...s.gVal, ...(onCommit ? { cursor: 'text' } : null) }}
+          onClick={() => { if (onCommit) { setEditVal(String(pct)); setEditing(true) } }}
+          title={onCommit ? '点击直接输入数值（0–100）' : undefined}
+        >{pct}</span>
+      )}
     </div>
   )
 }
@@ -382,6 +411,7 @@ const s = {
   gFill: { position: 'absolute', top: 0, left: 0, height: '100%', borderRadius: 5, transition: 'width .4s cubic-bezier(.22,.61,.36,1), box-shadow .16s ease' },
   gDot: { position: 'absolute', top: '50%', width: 11, height: 11, borderRadius: '50%', transform: 'translate(-50%,-50%)', background: '#fff', transition: 'left .4s cubic-bezier(.22,.61,.36,1), width .16s ease, height .16s ease, box-shadow .16s ease' },
   gVal: { fontSize: 14, color: '#fff', width: 26, textAlign: 'right', flexShrink: 0 },
+  gValInput: { width: 34, fontSize: 13, fontWeight: 700, color: '#fff', textAlign: 'center', flexShrink: 0, background: 'rgba(0,0,0,0.4)', border: '1px solid', borderRadius: 6, outline: 'none', padding: '2px 0', appearance: 'none' },
 
   ph2: { background: 'rgba(255,255,255,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 },
   upHead: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
