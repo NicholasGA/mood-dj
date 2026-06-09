@@ -65,8 +65,8 @@ export default function SongSearch({ accent = '#31c27c', playlists = [], onSearc
             : (<><Tab id="search" label="搜歌" /><Tab id="fav" label={`我的收藏${playlists.length ? ` ${playlists.length}` : ''}`} /></>)}
           {inPlaylist && trackList.length > 0 && (
             <>
-              <button style={{ ...s.miniBtn, color: accent, borderColor: `${accent}66` }} title="切换新旧顺序" onClick={() => setOldFirst(v => !v)}>
-                <Icon name="shuffle" size={11} color={accent} /> {oldFirst ? '旧→新' : '新→旧'}
+              <button style={{ ...s.miniBtn, color: accent, borderColor: `${accent}66` }} title="按收藏时间排序（我喜欢按加入先后；其它歌单按歌单顺序）" onClick={() => setOldFirst(v => !v)}>
+                <Icon name="clock" size={11} color={accent} /> {oldFirst ? '最早收藏' : '最近收藏'}
               </button>
               <button style={{ ...s.miniBtn, color: accent, borderColor: `${accent}66` }} title="随机播放这个歌单" onClick={() => onPlayList?.([...trackList].sort(() => Math.random() - 0.5))}>
                 <Icon name="shuffle" size={11} color={accent} /> 随机听
