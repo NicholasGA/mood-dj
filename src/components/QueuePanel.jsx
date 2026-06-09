@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import Icon from './Icon'
+import { glass } from '../ui/surface'
 
 // 播放队列 + 历史面板：「接下来」可播某首/置顶/移除/清空；「最近」点歌即重听
 export default function QueuePanel({ queue = [], history = [], accent = '#31c27c', onClose, onPlayAt, onToFront, onRemove, onClear, onPlayHistory, onExport }) {
@@ -86,7 +87,7 @@ function timeAgo(at) {
 
 const s = {
   overlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 400, display: 'flex', alignItems: 'center', justifyContent: 'center' },
-  panel: { width: 'min(460px, 92vw)', maxHeight: '78vh', display: 'flex', flexDirection: 'column', background: 'rgba(16,16,22,0.97)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 18, boxShadow: '0 30px 80px rgba(0,0,0,0.6)', overflow: 'hidden' },
+  panel: { ...glass, width: 'min(460px, 92vw)', maxHeight: '78vh', display: 'flex', flexDirection: 'column', borderRadius: 18, overflow: 'hidden' },
   head: { display: 'flex', alignItems: 'center', gap: 8, padding: '14px 18px 10px' },
   tab: { padding: '5px 12px', borderRadius: 20, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.12)', color: '#cbd5e1', fontSize: 13, fontWeight: 600, cursor: 'pointer' },
   clear: { marginLeft: 'auto', padding: '4px 10px', borderRadius: 8, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', color: '#cbd5e1', fontSize: 12, cursor: 'pointer' },

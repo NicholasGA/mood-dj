@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import Lyrics from './Lyrics'
 import Icon from './Icon'
+import { glass } from '../ui/surface'
 
 export default function NowPlaying({ track, isPlaying, loadingTrack, audioRef, onNext, queueCount, onTogglePlay, lyric, accent = '#31c27c', onVibe, onDislike, onSteer, onLike, onOpenQueue, volume = 0.8, onVolume }) {
   const [progress, setProgress] = useState(0)
@@ -74,7 +75,7 @@ export default function NowPlaying({ track, isPlaying, loadingTrack, audioRef, o
   const artist = track?.artists?.map(a => a.name).join(', ') || (loadingTrack ? '正在为你挑选可播放的歌曲' : '等待播放中')
 
   return (
-    <div style={s.card} className="fade-up">
+    <div style={{ ...s.card, boxShadow: `${s.card.boxShadow}, 0 22px 60px -28px color-mix(in srgb, ${accent} 50%, transparent)` }} className="fade-up">
       <div style={s.albumWrap} className={isPlaying ? 'floaty' : ''}>
         {art
           ? <img src={art} alt={title} style={{ ...s.album, boxShadow: isPlaying ? `0 12px 50px ${accent}99` : '0 8px 28px rgba(0,0,0,0.5)' }} />
@@ -155,7 +156,7 @@ export default function NowPlaying({ track, isPlaying, loadingTrack, audioRef, o
 }
 
 const s = {
-  card: { background: 'rgba(12,12,16,0.68)', border: '1px solid rgba(255,255,255,0.09)', borderRadius: 22, padding: 26, display: 'flex', flexDirection: 'column', gap: 16, alignItems: 'center', boxShadow: '0 24px 60px rgba(0,0,0,0.4)' },
+  card: { ...glass, borderRadius: 22, padding: 26, display: 'flex', flexDirection: 'column', gap: 16, alignItems: 'center' },
   albumWrap: { position: 'relative', width: 180, height: 180 },
   album: { width: 180, height: 180, borderRadius: 12, objectFit: 'cover', display: 'block', transition: 'box-shadow .5s' },
   ph: { background: 'rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 48 },

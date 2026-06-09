@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import Icon from './Icon'
+import { glassPill } from '../ui/surface'
 
 export default function DJAnnouncement({ text, visible, speak = true, onDuck }) {
   const spokenRef = useRef('')
@@ -49,12 +50,12 @@ export default function DJAnnouncement({ text, visible, speak = true, onDuck }) 
 
 const styles = {
   wrap: {
+    ...glassPill,
     position: 'fixed', bottom: 32, left: '50%', transform: 'translateX(-50%)',
-    background: 'rgba(10,10,12,0.9)',
-    border: '1px solid rgba(124,58,237,0.4)', borderRadius: 40,
+    border: '1px solid rgba(124,58,237,0.45)', borderRadius: 40,   // DJ 紫色身份描边
     padding: '12px 28px', display: 'flex', alignItems: 'center', gap: 10,
     transition: 'opacity .4s, transform .4s', zIndex: 100,
-    boxShadow: '0 0 30px rgba(124,58,237,0.2)',
+    boxShadow: `${glassPill.boxShadow}, 0 0 36px -6px rgba(124,58,237,0.35)`,   // 玻璃高光 + 紫色辉光
     maxWidth: '70vw',
   },
   mic: { display: 'inline-flex', flexShrink: 0 },

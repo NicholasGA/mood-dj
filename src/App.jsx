@@ -11,6 +11,7 @@ import { analyzeMood, generateStory, curateTracks, interpretRequest, configureLL
 import { localStory, localMoodConfig } from './services/djText'
 import { greeting, localPersona, vibeReaction } from './services/djPersona'
 import { effectiveVolume, clampVol } from './services/audioVolume'
+import { glassSoft } from './ui/surface'
 import { freshen, pushRecent, removeAt, moveToFront, pushHistory } from './services/radio'
 import QueuePanel from './components/QueuePanel'
 import { keyToAction } from './services/shortcuts'
@@ -852,7 +853,7 @@ const styles = {
   // 专辑封面氛围背景：缓慢漂移呼吸，跟着音乐"活着"
   ambient: { position: 'fixed', inset: '-12%', width: '124%', height: '124%', objectFit: 'cover', filter: 'blur(52px) saturate(1.8) brightness(0.9)', opacity: 0.82, zIndex: 0, pointerEvents: 'none', animation: 'ambientIn 1.2s ease, drift var(--breath,7s) ease-in-out infinite' },
   ambientVeil: { position: 'fixed', inset: 0, zIndex: 0, pointerEvents: 'none', background: 'radial-gradient(ellipse at 50% 42%, rgba(9,9,12,0.02) 0%, rgba(9,9,12,0.40) 58%, rgba(7,7,11,0.84) 100%)' },
-  titleBar: { height: 40, display: 'flex', alignItems: 'center', padding: '0 16px', gap: 12, flexShrink: 0, background: 'rgba(12,12,16,0.55)', borderBottom: '1px solid rgba(255,255,255,0.05)', zIndex: 50, WebkitAppRegion: 'drag', userSelect: 'none' },
+  titleBar: { ...glassSoft, height: 40, display: 'flex', alignItems: 'center', padding: '0 16px', gap: 12, flexShrink: 0, zIndex: 50, WebkitAppRegion: 'drag', userSelect: 'none' },
   appName: { fontSize: 14, fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 7 },
   tag: { fontSize: 11, padding: '2px 10px', borderRadius: 20, fontWeight: 500 },
   favTag: { fontSize: 11, padding: '2px 10px', borderRadius: 20, fontWeight: 500, background: 'rgba(244,114,182,0.15)', color: '#f9a8d4', display: 'inline-flex', alignItems: 'center', gap: 4 },

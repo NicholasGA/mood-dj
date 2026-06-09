@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import Icon from './Icon'
+import { glass } from '../ui/surface'
 
 // 按当前时段 + 工作日/周末给出情境推荐
 function getContextSuggestion(d = new Date()) {
@@ -151,10 +152,8 @@ function SliderRow({ label, leftTip, rightTip, value, onChange, accent }) {
 
 const styles = {
   panel: {
-    background: 'rgba(12,12,16,0.68)',
-    border: '1px solid rgba(255,255,255,0.09)', borderRadius: 22,
+    ...glass, borderRadius: 22,
     padding: 26, display: 'flex', flexDirection: 'column', gap: 16,
-    boxShadow: '0 24px 60px rgba(0,0,0,0.4)',
   },
   heading: { fontSize: 18, fontWeight: 700, color: '#f9fafb', margin: 0 },
   taste: { display: 'flex', alignItems: 'center', gap: 7, marginTop: -8, fontSize: 12.5, color: '#cbd5e1', fontWeight: 500, lineHeight: 1.4 },
