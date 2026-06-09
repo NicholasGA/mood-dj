@@ -57,21 +57,24 @@ export function albumPalette(accent = '#7c3aed') {
   }
 }
 
-// 鲜艳渐变玻璃方块（参考霓虹 bento 风格）：整块都保持饱和——亮角(掺白)→ 40% 本色 → 暗角(仍是 72% 本色，
-// 不再发黑) + 大圆角 + 同色辉光 + 顶部柔光，且无描边(参考是无缝色块，描边会显廉价/切割感)。
-// 关键修正：旧版渐变收到近黑(20% 本色掺 #07070d)显脏；参考是整块鲜亮、靠 bloom 与圆角立体，故改为整块浓色。
+// 鲜艳渐变玻璃方块（参考霓虹 bento 风格）："从内发光"的层次感——左上一个亮光斑(掺白) → 本色 →
+// 同色更深的暗角(掺一点深色但仍保留色相，不发灰)，配大圆角 + 同色 bloom 辉光 + 顶部柔光，无描边。
+// 关键：参考图的高级感来自"卡片像在发光"——亮光斑+向暗角的 falloff 是灵魂。
+//   · 旧版 A：falloff 收到 20% 本色掺黑 → 发灰发脏。
+//   · 旧版 B：干脆整块同亮度(72% 本色)无 falloff → 变平，"发光氛围"消失。
+//   · 现版：亮光斑 → 34% 处本色 → 暗角 42% 本色掺 #0b0a12，强 falloff 但暗角仍是同色深色，干净又有光感。
 export function vivid(c1, c2 = c1, radius = 30) {
   return {
     background: [
-      'radial-gradient(115% 75% at 28% -5%, rgba(255,255,255,0.18), rgba(255,255,255,0) 50%)',   // 顶部柔光（玻璃斜切吃光）
-      `linear-gradient(157deg, color-mix(in srgb, ${c1} 92%, #fff) 0%, ${c1} 40%, color-mix(in srgb, ${c1} 72%, #181018) 100%)`,  // 整块浓色：亮角→本色→仍浓的暗角
+      'radial-gradient(120% 85% at 26% -2%, rgba(255,255,255,0.16), rgba(255,255,255,0) 46%)',   // 顶部柔光（玻璃斜切吃光）
+      `radial-gradient(135% 120% at 28% 6%, color-mix(in srgb, ${c1} 82%, #fff) 0%, ${c1} 34%, color-mix(in srgb, ${c1} 42%, #0b0a12) 100%)`,  // 从内发光：亮光斑→本色→同色深角
     ].join(', '),
     borderRadius: radius,
     boxShadow: [
-      'inset 0 1px 0 rgba(255,255,255,0.28)',                                   // 柔顶部高光
-      'inset 0 -50px 70px -44px rgba(0,0,0,0.28)',                              // 极柔底部弧面（不压暗成黑）
-      `0 26px 60px -24px color-mix(in srgb, ${c1} 50%, transparent)`,           // 柔投影（更大更散，带色）
-      `0 0 70px -20px color-mix(in srgb, ${c1} 38%, transparent)`,              // 柔光晕（大而散，像参考的 bloom）
+      'inset 0 1px 0 rgba(255,255,255,0.26)',                                   // 柔顶部高光
+      'inset 0 -40px 70px -46px rgba(0,0,0,0.30)',                              // 极柔底部弧面（托住光斑层次）
+      `0 24px 56px -24px color-mix(in srgb, ${c1} 50%, transparent)`,           // 柔投影（更大更散，带色）
+      `0 0 80px -22px color-mix(in srgb, ${c1} 40%, transparent)`,              // 柔光晕（大而散，像参考的 bloom）
     ].join(', '),
   }
 }
