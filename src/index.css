@@ -7,8 +7,9 @@
 
 html, body, #root {
   height: 100%;
-  /* 不透明深色底（窗口本身也不透明）。氛围渐变由 App 根节点叠加，专辑色会染上来。 */
-  background: #0a0a0a;
+  /* 透明：窗口 transparent=true，桌面壁纸从 App 半透明表面透出（无形感）。
+     深色氛围与可读性由 App 根节点的半透明渐变层负责。 */
+  background: transparent;
   color: #f9fafb;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;

@@ -85,7 +85,7 @@ function timeAgo(at) {
 }
 
 const s = {
-  overlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)', zIndex: 400, display: 'flex', alignItems: 'center', justifyContent: 'center' },
+  overlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 400, display: 'flex', alignItems: 'center', justifyContent: 'center' },
   panel: { width: 'min(460px, 92vw)', maxHeight: '78vh', display: 'flex', flexDirection: 'column', background: 'rgba(16,16,22,0.97)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 18, boxShadow: '0 30px 80px rgba(0,0,0,0.6)', overflow: 'hidden' },
   head: { display: 'flex', alignItems: 'center', gap: 8, padding: '14px 18px 10px' },
   tab: { padding: '5px 12px', borderRadius: 20, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.12)', color: '#cbd5e1', fontSize: 13, fontWeight: 600, cursor: 'pointer' },

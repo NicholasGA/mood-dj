@@ -53,7 +53,7 @@ export default function DJAnnouncement({ text, visible, speak = true, audioRef }
 const styles = {
   wrap: {
     position: 'fixed', bottom: 32, left: '50%', transform: 'translateX(-50%)',
-    background: 'rgba(10,10,10,0.85)', backdropFilter: 'blur(20px)',
+    background: 'rgba(10,10,12,0.9)',
     border: '1px solid rgba(124,58,237,0.4)', borderRadius: 40,
     padding: '12px 28px', display: 'flex', alignItems: 'center', gap: 10,
     transition: 'opacity .4s, transform .4s', zIndex: 100,

@@ -156,7 +156,7 @@ export default function NowPlaying({ track, isPlaying, loadingTrack, audioRef, o
 }
 
 const s = {
-  card: { background: 'rgba(12,12,16,0.72)', backdropFilter: 'blur(28px)', border: '1px solid rgba(255,255,255,0.09)', borderRadius: 22, padding: 26, display: 'flex', flexDirection: 'column', gap: 16, alignItems: 'center', boxShadow: '0 24px 60px rgba(0,0,0,0.4)' },
+  card: { background: 'rgba(12,12,16,0.68)', border: '1px solid rgba(255,255,255,0.09)', borderRadius: 22, padding: 26, display: 'flex', flexDirection: 'column', gap: 16, alignItems: 'center', boxShadow: '0 24px 60px rgba(0,0,0,0.4)' },
   albumWrap: { position: 'relative', width: 180, height: 180 },
   album: { width: 180, height: 180, borderRadius: 12, objectFit: 'cover', display: 'block', transition: 'box-shadow .5s' },
   ph: { background: 'rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 48 },

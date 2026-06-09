@@ -37,10 +37,11 @@ function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1280, height: 820, minWidth: 960, minHeight: 660,
     frame: false,
-    // 注：本想用 Win11 Mica(透明窗口透出桌面)做"无形感"，但本应用 UI 大量用 backdrop-filter
-    // 毛玻璃，透明窗口下 Chromium 合成器会丢掉这些图层→整屏只剩纯文字。故保持不透明深色，
-    // "氛围感/呼吸感"改由应用内渐变+呼吸动画+专辑色实现（不依赖窗口透明）。
-    backgroundColor: '#0a0a0a',
+    // 无形感：透明窗口，桌面壁纸从 App 的半透明表面透出。
+    // 前提是 UI 不能用 backdrop-filter 毛玻璃（透明窗口下 Chromium 会丢弃这些图层），
+    // 故所有卡片/栏都改成"半透明纯色"而非模糊玻璃。
+    transparent: true,
+    backgroundColor: '#00000000',
     icon: path.join(__dirname, 'build', 'icon.png'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),

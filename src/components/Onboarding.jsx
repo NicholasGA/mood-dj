@@ -108,8 +108,9 @@ export default function Onboarding({ qqCookies, onQQAuth, onReady, onClose, canC
 }
 
 const s = {
-  wrap: { position: 'fixed', inset: 0, background: 'radial-gradient(ellipse at center,#1a0a3e 0%,#0a0a0a 70%)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 500, overflowY: 'auto', padding: 20 },
-  card: { position: 'relative', background: 'rgba(255,255,255,0.05)', backdropFilter: 'blur(20px)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 22, padding: '32px 34px', maxWidth: 440, width: '100%' },
+  // 透明窗口：壁纸从半透明深色渐变透出（无形感）；卡片用半透明深色纯色，不再用毛玻璃模糊。
+  wrap: { position: 'fixed', inset: 0, background: 'radial-gradient(ellipse at center, rgba(26,10,62,0.55) 0%, rgba(8,8,12,0.72) 70%)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 500, overflowY: 'auto', padding: 20 },
+  card: { position: 'relative', background: 'rgba(15,15,22,0.74)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 22, padding: '32px 34px', maxWidth: 440, width: '100%', boxShadow: '0 24px 70px rgba(0,0,0,0.5)' },
   x: { position: 'absolute', top: 14, right: 16, background: 'transparent', border: 'none', color: '#9ca3af', fontSize: 16, cursor: 'pointer' },
   title: { fontSize: 28, fontWeight: 700, color: '#fff', textAlign: 'center', margin: '6px 0 2px' },
   sub: { fontSize: 13, color: '#a78bfa', textAlign: 'center', margin: '0 0 18px', letterSpacing: 1 },
