@@ -166,7 +166,18 @@ export async function analyzeMood(text, energy, valence, platform = 'qq') {
   if (cfg.dj_intro && cfg.dj_intro.length > 30) {
     cfg.dj_intro = cfg.dj_intro.split(/[。！!?？\n]/)[0].slice(0, 30)
   }
+  // 校验模型给的颜色：非法值(如 "red"/"#ff")会一路流进 canvas 的 parseInt→NaN→抛错，统一兜底
+  cfg.color_primary = sanitizeHex(cfg.color_primary, '#31c27c')
+  cfg.color_secondary = sanitizeHex(cfg.color_secondary, '#1db954')
   return cfg
+}
+
+// 把任意值规整成合法 #rrggbb；非法就返回兜底色。纯函数，供 analyzeMood 与单测用。
+export function sanitizeHex(hex, fallback = '#31c27c') {
+  if (typeof hex !== 'string') return fallback
+  let m = hex.trim().replace(/^#/, '')
+  if (/^[0-9a-fA-F]{3}$/.test(m)) m = m.split('').map(c => c + c).join('')
+  return /^[0-9a-fA-F]{6}$/.test(m) ? `#${m.toLowerCase()}` : fallback
 }
 
 // 本地意图解析（不依赖 AI）：识别意图 mode（探索/收藏/普通）+ 剥指令/意图词 + 拆歌手与心情

@@ -650,7 +650,7 @@ export default function App() {
   function togglePlay() {
     const audio = audioRef.current
     if (!audio.src) return
-    isPlaying ? audio.pause() : audio.play()
+    isPlaying ? audio.pause() : audio.play().catch(() => {})   // 自动播放策略拒绝时别变成未捕获 rejection
   }
 
   function toggleMini(on) {

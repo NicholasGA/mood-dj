@@ -1,5 +1,20 @@
 import { describe, it, expect } from 'vitest'
-import { splitKeys, localInterpret, configureLLM, hasLLMKey, evalBudget } from '../src/services/claudeDJ'
+import { splitKeys, localInterpret, configureLLM, hasLLMKey, evalBudget, sanitizeHex } from '../src/services/claudeDJ'
+
+describe('sanitizeHex（校验模型给的颜色，挡住 NaN 流进 canvas）', () => {
+  it('合法 6 位 / 3 位都规整成 #rrggbb 小写', () => {
+    expect(sanitizeHex('#A1B2C3')).toBe('#a1b2c3')
+    expect(sanitizeHex('#abc')).toBe('#aabbcc')
+    expect(sanitizeHex('a1b2c3')).toBe('#a1b2c3')
+  })
+  it('非法值（颜色名/缺位/非字符串/空）一律兜底', () => {
+    expect(sanitizeHex('red')).toBe('#31c27c')
+    expect(sanitizeHex('#ff')).toBe('#31c27c')
+    expect(sanitizeHex('#12g456')).toBe('#31c27c')
+    expect(sanitizeHex(undefined)).toBe('#31c27c')
+    expect(sanitizeHex(null, '#1db954')).toBe('#1db954')
+  })
+})
 
 describe('splitKeys', () => {
   it('逗号分隔、去空白、丢空项', () => {

@@ -15,8 +15,10 @@ const seedFrom = (str) => {
   return h >>> 0
 }
 const hexToRgb = (h) => {
-  const m = h.replace('#', '')
-  const n = parseInt(m.length === 3 ? m.split('').map(c => c + c).join('') : m, 16)
+  const m = String(h || '').replace('#', '')
+  const full = m.length === 3 ? m.split('').map(c => c + c).join('') : m
+  const n = parseInt(full, 16)
+  if (!/^[0-9a-fA-F]{6}$/.test(full) || Number.isNaN(n)) return [49, 194, 124]   // 非法色兜底，别让 NaN 流进 canvas
   return [(n >> 16) & 255, (n >> 8) & 255, n & 255]
 }
 const rgbToHex = (r, g, b) =>
