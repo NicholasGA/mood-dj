@@ -48,7 +48,7 @@ if (!app.requestSingleInstanceLock()) {
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1280, height: 820, minWidth: 960, minHeight: 660,
-    frame: false,
+    frame: false, center: true,
     // 无形感：透明窗口，桌面壁纸从 App 的半透明表面透出。
     // 前提是 UI 不能用 backdrop-filter 毛玻璃（透明窗口下 Chromium 会丢弃这些图层），
     // 故所有卡片/栏都改成"半透明纯色"而非模糊玻璃。
@@ -80,6 +80,11 @@ function createWindow() {
       try { new Notification({ title: 'Mood DJ 收进托盘了', body: '还在后台放着 · 点托盘图标唤回 · 右键可退出' }).show() } catch {}
     }
   })
+
+  // 最大化/还原通知前台：最大化时去掉窗口圆角（否则四角露出桌面）
+  const sendWinState = () => { try { mainWindow.webContents.send('win-state', { maximized: mainWindow.isMaximized() }) } catch {} }
+  mainWindow.on('maximize', sendWinState)
+  mainWindow.on('unmaximize', sendWinState)
 }
 
 // ── 系统托盘：后台存在感（窗口收起仍在放，托盘可控+可唤回）──────────────

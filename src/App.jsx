@@ -40,6 +40,7 @@ export default function App() {
   const [tasteProfile, setTasteProfile] = useState(null)   // AI 音乐画像，无感呈现在主界面
   const [showQueue, setShowQueue] = useState(false)   // 播放队列面板
   const [showPicker, setShowPicker] = useState(false)   // 播放中点"换心情"→ 回到选心情
+  const [maximized, setMaximized] = useState(false)     // 最大化时去掉窗口圆角
   const [sleepMin, setSleepMin] = useState(0)   // 睡眠定时（分钟，0=关）
   const [sleepLeft, setSleepLeft] = useState('')   // 剩余 mm:ss
   const sleepEndRef = useRef(0)
@@ -134,6 +135,9 @@ export default function App() {
 
   // 自动更新状态
   useEffect(() => { window.electronAPI.onUpdateStatus?.(setUpdate) }, [])
+
+  // 窗口最大化状态（决定要不要圆角）
+  useEffect(() => { window.electronAPI.onWinState?.(s => setMaximized(!!s?.maximized)) }, [])
 
   // 拉取/刷新 QQ 收藏（"我喜欢"等）：更新个性化样本 + 左上角收藏数
   const refreshFavCount = useCallback(() => {
@@ -793,7 +797,7 @@ export default function App() {
   }
 
   return (
-    <div style={{ '--accent': accent, '--accent2': accent2, '--breath': breath, ...styles.root }}>
+    <div style={{ '--accent': accent, '--accent2': accent2, '--breath': breath, ...styles.root, borderRadius: maximized ? 0 : 18, border: maximized ? 'none' : '1px solid rgba(255,255,255,0.08)' }}>
       {ambientArt && <img src={ambientArt} alt="" aria-hidden style={styles.ambient} key={ambientArt} />}
       {ambientArt && <div style={styles.ambientVeil} aria-hidden />}
       <div style={styles.titleBar}>
@@ -889,19 +893,19 @@ export default function App() {
 }
 
 const styles = {
-  // 半透明深色层 + 顶部心情色辉光：桌面壁纸从这层隐约透出（无形感），又压暗保证可读（氛围感）。
-  // 透明度偏低让壁纸更明显；文字几乎都落在自带深色底的卡片上，所以可读性不受壁纸影响。
-  root: { height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', fontFamily: 'system-ui,sans-serif', color: '#f9fafb', background: 'radial-gradient(125% 80% at 50% -12%, color-mix(in srgb, var(--accent) 20%, transparent) 0%, transparent 56%), linear-gradient(180deg, rgba(8,8,12,0.30) 0%, rgba(6,6,10,0.60) 100%)' },
-  // 专辑封面氛围背景：缓慢漂移呼吸，跟着音乐"活着"
-  ambient: { position: 'fixed', inset: '-12%', width: '124%', height: '124%', objectFit: 'cover', filter: 'blur(52px) saturate(1.8) brightness(0.9)', opacity: 0.82, zIndex: 0, pointerEvents: 'none', animation: 'ambientIn 1.2s ease, drift var(--breath,7s) ease-in-out infinite' },
-  ambientVeil: { position: 'fixed', inset: 0, zIndex: 0, pointerEvents: 'none', background: 'radial-gradient(ellipse at 50% 42%, rgba(9,9,12,0.02) 0%, rgba(9,9,12,0.40) 58%, rgba(7,7,11,0.84) 100%)' },
-  titleBar: { ...glassSoft, height: 40, display: 'flex', alignItems: 'center', padding: '0 16px', gap: 12, flexShrink: 0, zIndex: 50, WebkitAppRegion: 'drag', userSelect: 'none' },
+  // 圆角窗口 + 半透明深色层 + 心情色辉光：壁纸隐约透出(无形感)，又压暗保证可读(氛围感)。
+  // position:relative + overflow:hidden 让圆角能裁住里面的氛围背景/可视化。
+  root: { position: 'relative', height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', fontFamily: 'system-ui,sans-serif', color: '#f9fafb', background: 'radial-gradient(130% 90% at 50% -14%, color-mix(in srgb, var(--accent) 26%, transparent) 0%, transparent 54%), radial-gradient(120% 70% at 50% 116%, color-mix(in srgb, var(--accent2) 16%, transparent) 0%, transparent 50%), linear-gradient(180deg, rgba(10,10,15,0.46) 0%, rgba(6,6,10,0.74) 100%)' },
+  // 专辑封面氛围背景：缓慢漂移呼吸，跟着音乐"活着"（absolute 以便被根节点圆角裁住）
+  ambient: { position: 'absolute', inset: '-12%', width: '124%', height: '124%', objectFit: 'cover', filter: 'blur(52px) saturate(1.8) brightness(0.9)', opacity: 0.82, zIndex: 0, pointerEvents: 'none', animation: 'ambientIn 1.2s ease, drift var(--breath,7s) ease-in-out infinite' },
+  ambientVeil: { position: 'absolute', inset: 0, zIndex: 0, pointerEvents: 'none', background: 'radial-gradient(ellipse at 50% 42%, rgba(9,9,12,0.02) 0%, rgba(9,9,12,0.40) 58%, rgba(7,7,11,0.84) 100%)' },
+  titleBar: { ...glassSoft, height: 44, display: 'flex', alignItems: 'center', padding: '0 14px', gap: 11, flexShrink: 0, zIndex: 50, WebkitAppRegion: 'drag', userSelect: 'none' },
   appName: { fontSize: 14, fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 7 },
   tag: { fontSize: 11, padding: '2px 10px', borderRadius: 20, fontWeight: 500 },
   favTag: { fontSize: 11, padding: '2px 10px', borderRadius: 20, fontWeight: 500, background: 'rgba(244,114,182,0.15)', color: '#f9a8d4', display: 'inline-flex', alignItems: 'center', gap: 4 },
   winCtrl: { marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 4, WebkitAppRegion: 'no-drag' },
   user: { fontSize: 12, color: '#6b7280', marginRight: 8, cursor: 'pointer' },
-  wBtn: { width: 28, height: 22, background: 'rgba(255,255,255,0.07)', border: 'none', color: '#9ca3af', fontSize: 11, cursor: 'pointer', borderRadius: 4, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' },
+  wBtn: { width: 30, height: 26, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.07)', color: '#9ca3af', fontSize: 11, cursor: 'pointer', borderRadius: 8, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' },
   errBanner: { position: 'fixed', top: 44, left: '50%', transform: 'translateX(-50%)', background: 'rgba(60,16,16,0.92)', border: '1px solid rgba(239,68,68,0.3)', color: '#fca5a5', fontSize: 13, padding: '8px 20px', borderRadius: 8, zIndex: 200, cursor: 'pointer', whiteSpace: 'nowrap' },
   content: { flex: 1, display: 'flex', flexDirection: 'column', gap: 16, padding: 24, position: 'relative', zIndex: 10, overflowY: 'auto' },
   cardRow: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, alignItems: 'start' },

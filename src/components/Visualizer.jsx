@@ -242,6 +242,6 @@ export default function Visualizer({ moodConfig, isPlaying, analyser, track }) {
   }, [])
 
   return <canvas ref={canvasRef} style={{
-    position: 'fixed', inset: 0, width: '100%', height: '100%', zIndex: 1, pointerEvents: 'none',
+    position: 'absolute', inset: 0, width: '100%', height: '100%', zIndex: 1, pointerEvents: 'none',
   }} />
 }
