@@ -17,6 +17,7 @@ import { glassSoft } from './ui/surface'
 import { freshen, pushRecent, removeAt, moveToFront, pushHistory } from './services/radio'
 import QueuePanel from './components/QueuePanel'
 import MoodSwitcher from './components/MoodSwitcher'
+import SongSearch from './components/SongSearch'
 import { keyToAction } from './services/shortcuts'
 import { remainingLabel, sleepVolume, nextDuration } from './services/sleepTimer'
 import { extractAlbumColors } from './services/albumColor'
@@ -42,6 +43,7 @@ export default function App() {
   const [showQueue, setShowQueue] = useState(false)   // 播放队列面板
   const [showPicker, setShowPicker] = useState(false)   // 播放中点"换心情"→ 回到选心情
   const [moodPopAt, setMoodPopAt] = useState(null)      // 播放中点心情名 → 在点击处弹换心情小浮窗(右键菜单式)
+  const [showSearch, setShowSearch] = useState(false)   // 按歌名搜歌面板（和"跟 DJ 说想法"分开）
   const [maximized, setMaximized] = useState(false)     // 最大化时去掉窗口圆角
   const [repeatOne, setRepeatOne] = useState(false)     // 单曲循环：放完重头放本首，不续下一首
   const repeatOneRef = useRef(repeatOne)                // 给 onEnded 闭包读最新值
@@ -292,6 +294,9 @@ export default function App() {
   function queueRemove(i) { const q = removeAt(queueRef.current, i); queueRef.current = q; setQueue(q) }
   function queueClear() { queueRef.current = []; setQueue([]); setShowQueue(false) }
   function playFromHistory(track) { if (!track?.mid) return; queueRef.current = [track, ...queueRef.current]; setQueue(queueRef.current); setShowQueue(false); playNext() }
+  // 搜歌面板：立即播 / 加入队列
+  function playSearched(track) { if (!track?.mid) return; queueRef.current = [track, ...queueRef.current]; setQueue(queueRef.current); setShowSearch(false); playNext() }
+  function queueSearched(track) { if (!track?.mid) return; queueRef.current = [...queueRef.current, track]; setQueue(queueRef.current); showToast(`已加入队列：${track.name}`) }
 
   // 把一批歌导出成一个新 QQ 歌单（签名版接口）
   async function exportToQQ(tracks, label) {
@@ -967,7 +972,7 @@ export default function App() {
             track={currentTrack} isPlaying={isPlaying} loadingTrack={loadingTrack} audioRef={audioRef}
             accent={accent} accent2={accent2}
             onTogglePlay={togglePlay} onNext={playNext} onLike={likeCurrent} onDislike={dislikeCurrent}
-            onVibe={adjustVibe} onSteer={steerRadio} onOpenQueue={() => setShowQueue(true)} onPlayAt={queuePlayAt} onSetVibe={setVibeManual} onShuffleNext={shuffleUpNext}
+            onVibe={adjustVibe} onSteer={steerRadio} onOpenQueue={() => setShowQueue(true)} onPlayAt={queuePlayAt} onSetVibe={setVibeManual} onShuffleNext={shuffleUpNext} onOpenSearch={() => setShowSearch(true)}
             queueCount={queue.length} nextTrack={queue[0]} upNext={queue} lyric={lyric} moodConfig={moodConfig}
             story={memoryRef.current.songStories?.[currentTrack.mid] || localStory(currentTrack)}
             djName={getPersona()?.name} analyser={analyserRef} volume={volume} onVolume={setUserVolume}
@@ -1005,6 +1010,16 @@ export default function App() {
           onClear={queueClear}
           onPlayHistory={playFromHistory}
           onExport={exportToQQ}
+        />
+      )}
+
+      {showSearch && (
+        <SongSearch
+          accent={accent}
+          onSearch={(query) => searchTracks(qqCookiesRef.current, query, 20)}
+          onPlay={playSearched}
+          onQueue={queueSearched}
+          onClose={() => setShowSearch(false)}
         />
       )}
 

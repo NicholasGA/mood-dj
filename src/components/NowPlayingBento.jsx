@@ -52,7 +52,7 @@ function MiniWave({ analyser, color, isPlaying }) {
 
 export default function NowPlayingBento({
   track, isPlaying, loadingTrack, audioRef, accent = '#31c27c', accent2 = '#4f46e5',
-  onTogglePlay, onNext, onLike, onDislike, onVibe, onSteer, onOpenQueue, onPlayAt, onSetVibe, onShuffleNext,
+  onTogglePlay, onNext, onLike, onDislike, onVibe, onSteer, onOpenQueue, onPlayAt, onSetVibe, onShuffleNext, onOpenSearch,
   queueCount = 0, nextTrack, upNext = [], lyric, moodConfig, story, djName, analyser, volume = 0.8, onVolume, onRepick, inFav = false,
   repeatOne = false, onToggleRepeat,
 }) {
@@ -272,9 +272,10 @@ export default function NowPlayingBento({
         <button style={{ ...s.pill, ...(inFav ? s.pillFav : { color: '#f9a8d4', borderColor: '#f472b640' }) }} onClick={onLike} title={inFav ? '已在 QQ 收藏' : '加入 QQ 我喜欢'}><Icon name="heart" size={14} color="#fff" filled /> {inFav ? '已收藏' : '喜欢'}</button>
         <button style={s.pill} onClick={onDislike}><Icon name="thumbsDown" size={14} color="#cbd5e1" /> 不喜欢</button>
         <span style={s.div} />
+        <button style={s.pill} onClick={onOpenSearch} title="按歌名/歌手搜歌"><Icon name="search" size={14} color="#9ca3af" /> 搜歌</button>
         <div style={s.steerWrap}>
           <span style={s.steerMic}><Icon name="mic" size={15} color="#9ca3af" /></span>
-          <input style={s.steerInput} placeholder="跟 DJ 说…「放点周杰伦但安静的」" value={steerText}
+          <input style={s.steerInput} placeholder="跟 DJ 说想法…「放点周杰伦但安静的」(点歌名用左边搜歌)" value={steerText}
             onChange={e => setSteerText(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter' && steerText.trim()) { onSteer(steerText.trim()); setSteerText('') } }} />
           <button style={{ ...s.steerBtn, background: accent, opacity: steerText.trim() ? 1 : 0.5 }} disabled={!steerText.trim()} title="发给 DJ"
