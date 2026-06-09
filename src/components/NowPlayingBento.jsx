@@ -52,7 +52,7 @@ function MiniWave({ analyser, color, isPlaying }) {
 
 export default function NowPlayingBento({
   track, isPlaying, loadingTrack, audioRef, accent = '#31c27c', accent2 = '#4f46e5',
-  onTogglePlay, onNext, onLike, onDislike, onVibe, onSteer, onOpenQueue,
+  onTogglePlay, onNext, onLike, onDislike, onVibe, onSteer, onOpenQueue, onPlayAt,
   queueCount = 0, nextTrack, upNext = [], lyric, moodConfig, story, djName, analyser, volume = 0.8, onVolume, onRepick, inFav = false,
   repeatOne = false, onToggleRepeat,
 }) {
@@ -60,6 +60,7 @@ export default function NowPlayingBento({
   const [rawDur, setRawDur] = useState(0)  // audio.duration（QQ 流有时是 Infinity）
   const [dragRatio, setDragRatio] = useState(null)  // 拖动时的比例（覆盖显示）
   const [barHover, setBarHover] = useState(false)   // 鼠标悬停进度条 → 展开高亮，明确"已移到可拖区"
+  const [hoverRow, setHoverRow] = useState(null)    // 待播列表悬停的行 → 高亮 + 序号变播放键，点一下直切
   const [steerText, setSteerText] = useState('')
   const barRef = useRef(null)
 
@@ -193,22 +194,36 @@ export default function NowPlayingBento({
           </div>
 
           {/* 接下来：整条待播列表（撑满左栏剩余高度，可滚），点开管理队列 */}
-          <div style={{ ...vividDark(pal.next, 28), ...s.tile, flex: 1, cursor: 'pointer', ...clip }} onClick={onOpenQueue} title="查看/管理队列">
+          <div style={{ ...vividDark(pal.next, 28), ...s.tile, flex: 1, ...clip }}>
             <LiquidLayer accent={pal.next} seed={`${seed}-n`} opacity={0.32} />
-            <div style={s.upHead}><span style={s.tLabel}>接下来</span><span style={s.upCount}>{queueCount} 首待播</span></div>
+            <div style={s.upHead}>
+              <span style={s.tLabel}>接下来</span>
+              <span style={s.upManage} onClick={onOpenQueue} title="展开管理：重排 / 移除">{queueCount} 首 · 管理 ›</span>
+            </div>
             <div style={s.upList} className="lyrics-scroll">
-              {upNext.slice(0, 30).map((t, i) => (
-                <div key={t.mid || i} style={s.upRow}>
-                  <span style={s.upNum}>{i + 1}</span>
-                  {t.album?.images?.[0]?.url
-                    ? <img src={t.album.images[0].url} alt="" style={s.upThumb} draggable={false} />
-                    : <div style={{ ...s.upThumb, ...s.ph2 }}>♪</div>}
-                  <div style={s.upInfo}>
-                    <div style={s.upTitle} title={t.name}>{t.name}</div>
-                    <div style={s.upArtist}>{t.artists?.map(a => a.name).join(', ') || ''}</div>
+              {upNext.slice(0, 30).map((t, i) => {
+                const hov = hoverRow === i
+                return (
+                  <div key={t.mid || i}
+                    style={{ ...s.upRow, ...(hov ? { background: 'rgba(255,255,255,0.10)' } : null) }}
+                    onClick={() => onPlayAt?.(i)}
+                    onMouseEnter={() => setHoverRow(i)}
+                    onMouseLeave={() => setHoverRow(v => (v === i ? null : v))}
+                    title={`点击播放：${t.name}`}
+                  >
+                    <span style={{ ...s.upNum, ...(hov ? { color: '#fff' } : null) }}>
+                      {hov ? <Icon name="play" size={10} color="#fff" filled /> : (i + 1)}
+                    </span>
+                    {t.album?.images?.[0]?.url
+                      ? <img src={t.album.images[0].url} alt="" style={s.upThumb} draggable={false} />
+                      : <div style={{ ...s.upThumb, ...s.ph2 }}>♪</div>}
+                    <div style={s.upInfo}>
+                      <div style={{ ...s.upTitle, ...(hov ? { color: '#fff' } : null) }} title={t.name}>{t.name}</div>
+                      <div style={s.upArtist}>{t.artists?.map(a => a.name).join(', ') || ''}</div>
+                    </div>
                   </div>
-                </div>
-              ))}
+                )
+              })}
               {!upNext.length && <div style={s.upEmpty}>自动续上…无限电台</div>}
             </div>
           </div>
@@ -326,8 +341,9 @@ const s = {
   ph2: { background: 'rgba(255,255,255,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 },
   upHead: { display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' },
   upCount: { fontSize: 11.5, color: '#9fb3c8' },
-  upList: { flex: 1, minHeight: 0, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8, marginTop: 6, paddingRight: 4 },
-  upRow: { display: 'flex', alignItems: 'center', gap: 9 },
+  upManage: { fontSize: 11.5, color: '#9fb3c8', cursor: 'pointer', flexShrink: 0, padding: '2px 4px', borderRadius: 6 },
+  upList: { flex: 1, minHeight: 0, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 3, marginTop: 6, paddingRight: 4 },
+  upRow: { display: 'flex', alignItems: 'center', gap: 9, padding: '5px 8px', margin: '0 -4px', borderRadius: 10, cursor: 'pointer', transition: 'background .14s ease' },
   upNum: { fontSize: 11, color: 'rgba(255,255,255,0.38)', width: 16, flexShrink: 0, textAlign: 'right', fontVariantNumeric: 'tabular-nums' },
   upThumb: { width: 34, height: 34, borderRadius: 7, objectFit: 'cover', flexShrink: 0, boxShadow: '0 3px 10px rgba(0,0,0,0.4)' },
   upInfo: { minWidth: 0, flex: 1 },

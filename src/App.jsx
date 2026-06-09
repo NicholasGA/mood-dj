@@ -921,7 +921,7 @@ export default function App() {
             track={currentTrack} isPlaying={isPlaying} loadingTrack={loadingTrack} audioRef={audioRef}
             accent={accent} accent2={accent2}
             onTogglePlay={togglePlay} onNext={playNext} onLike={likeCurrent} onDislike={dislikeCurrent}
-            onVibe={adjustVibe} onSteer={steerRadio} onOpenQueue={() => setShowQueue(true)}
+            onVibe={adjustVibe} onSteer={steerRadio} onOpenQueue={() => setShowQueue(true)} onPlayAt={queuePlayAt}
             queueCount={queue.length} nextTrack={queue[0]} upNext={queue} lyric={lyric} moodConfig={moodConfig}
             story={memoryRef.current.songStories?.[currentTrack.mid] || localStory(currentTrack)}
             djName={getPersona()?.name} analyser={analyserRef} volume={volume} onVolume={setUserVolume}
