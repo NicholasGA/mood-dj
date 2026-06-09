@@ -49,41 +49,45 @@ function MiniWave({ analyser, color, isPlaying }) {
 export default function NowPlayingBento({
   track, isPlaying, loadingTrack, audioRef, accent = '#31c27c', accent2 = '#4f46e5',
   onTogglePlay, onNext, onLike, onDislike, onVibe, onSteer, onOpenQueue,
-  queueCount = 0, nextTrack, upNext = [], lyric, moodConfig, story, djName, analyser, volume = 0.8, onVolume, onRepick,
+  queueCount = 0, nextTrack, upNext = [], lyric, moodConfig, story, djName, analyser, volume = 0.8, onVolume, onRepick, inFav = false,
 }) {
-  const [progress, setProgress] = useState(0)
-  const [dur, setDur] = useState(0)
+  const [cur, setCur] = useState(0)        // 当前播放秒数
+  const [rawDur, setRawDur] = useState(0)  // audio.duration（QQ 流有时是 Infinity）
+  const [dragRatio, setDragRatio] = useState(null)  // 拖动时的比例（覆盖显示）
   const [steerText, setSteerText] = useState('')
   const barRef = useRef(null)
-  const draggingRef = useRef(false)
 
   useEffect(() => {
     const audio = audioRef?.current
     if (!audio) return
-    const update = () => { if (audio.duration && !draggingRef.current) setProgress(audio.currentTime / audio.duration) }
-    const onMeta = () => setDur(audio.duration || 0)
-    audio.addEventListener('timeupdate', update)
+    const onTime = () => setCur(audio.currentTime || 0)
+    const onMeta = () => setRawDur(audio.duration || 0)
+    audio.addEventListener('timeupdate', onTime)
     audio.addEventListener('durationchange', onMeta)
     audio.addEventListener('loadedmetadata', onMeta)
     return () => {
-      audio.removeEventListener('timeupdate', update)
+      audio.removeEventListener('timeupdate', onTime)
       audio.removeEventListener('durationchange', onMeta)
       audio.removeEventListener('loadedmetadata', onMeta)
     }
   }, [audioRef])
+
+  // 真实时长：audio.duration 有限就用它，否则退回 QQ 接口给的歌曲时长（修复进度一直 0:00）
+  const effDur = (isFinite(rawDur) && rawDur > 0) ? rawDur : (track?.duration_ms || 0) / 1000
+  const ratio = dragRatio != null ? dragRatio : (effDur > 0 ? Math.min(1, cur / effDur) : 0)
 
   const ratioFromEvent = (e) => {
     const rect = barRef.current.getBoundingClientRect()
     return Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width))
   }
   function onBarDown(e) {
-    draggingRef.current = true
-    setProgress(ratioFromEvent(e))
-    const move = (ev) => setProgress(ratioFromEvent(ev))
+    setDragRatio(ratioFromEvent(e))
+    const move = (ev) => setDragRatio(ratioFromEvent(ev))
     const up = (ev) => {
-      draggingRef.current = false
+      const r = ratioFromEvent(ev)
       const audio = audioRef?.current
-      if (audio?.duration) audio.currentTime = ratioFromEvent(ev) * audio.duration
+      if (audio && effDur > 0) audio.currentTime = r * effDur
+      setDragRatio(null)
       window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up)
     }
     window.addEventListener('pointermove', move); window.addEventListener('pointerup', up)
@@ -116,14 +120,19 @@ export default function NowPlayingBento({
             </div>
             <div style={s.heroMid}>
               <div style={s.heroTitle} title={title}>{title}</div>
-              <div style={s.heroArtist}>{artist}</div>
+              <div style={s.heroSub}>
+                <span style={s.heroArtist}>{artist}</span>
+                {track && (inFav
+                  ? <span style={s.favYes} title="这首已在你的 QQ「我喜欢」里">♥ 已收藏</span>
+                  : <span style={s.favNew} title="这是为你新推的歌，喜欢就收藏">✨ 新歌</span>)}
+              </div>
               <div style={s.progRow}>
-                <span style={{ ...s.time, ...s.timeBig, color: '#fff' }} className="led">{fmt(progress * dur)}</span>
+                <span style={{ ...s.time, ...s.timeBig, color: '#fff' }} className="led">{fmt(ratio * effDur)}</span>
                 <div ref={barRef} style={s.bar} onPointerDown={onBarDown}>
-                  <div style={{ ...s.fill, width: `${progress * 100}%` }} />
-                  <div style={{ ...s.knob, left: `${progress * 100}%` }} />
+                  <div style={{ ...s.fill, width: `${ratio * 100}%` }} />
+                  <div style={{ ...s.knob, left: `${ratio * 100}%` }} />
                 </div>
-                <span style={{ ...s.time, color: 'rgba(255,255,255,0.85)' }} className="led">{fmt(dur)}</span>
+                <span style={{ ...s.time, color: 'rgba(255,255,255,0.85)' }} className="led">{fmt(effDur)}</span>
               </div>
               <div style={s.heroCtrl}>
                 <button style={s.playBtn} onClick={onTogglePlay} title="播放/暂停"><Icon name={isPlaying ? 'pause' : 'play'} size={22} color={accent} filled /></button>
@@ -183,7 +192,7 @@ export default function NowPlayingBento({
 
       {/* 底部控制坞（全宽、不随歌词滚动） */}
       <div style={s.dock}>
-        <button style={{ ...s.pill, color: '#f9a8d4', borderColor: '#f472b640' }} onClick={onLike}><Icon name="heart" size={14} color="#f9a8d4" filled /> 喜欢</button>
+        <button style={{ ...s.pill, ...(inFav ? s.pillFav : { color: '#f9a8d4', borderColor: '#f472b640' }) }} onClick={onLike} title={inFav ? '已在 QQ 收藏' : '加入 QQ 我喜欢'}><Icon name="heart" size={14} color="#fff" filled /> {inFav ? '已收藏' : '喜欢'}</button>
         <button style={s.pill} onClick={onDislike}><Icon name="thumbsDown" size={14} color="#cbd5e1" /> 不喜欢</button>
         <span style={s.div} />
         <button style={s.pill} onClick={() => onVibe('up')}><Icon name="flame" size={14} color="#fb923c" /> 嗨</button>
@@ -229,7 +238,10 @@ const s = {
   ph: { background: 'rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 34 },
   heroMid: { flex: 1, minWidth: 0 },
   heroTitle: { fontSize: 19, fontWeight: 800, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textShadow: '0 1px 8px rgba(0,0,0,0.4)' },
-  heroArtist: { fontSize: 13, color: 'rgba(255,255,255,0.82)', marginTop: 2, marginBottom: 10, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
+  heroSub: { display: 'flex', alignItems: 'center', gap: 8, marginTop: 3, marginBottom: 10 },
+  heroArtist: { fontSize: 13, color: 'rgba(255,255,255,0.82)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 },
+  favYes: { flexShrink: 0, fontSize: 11, fontWeight: 600, padding: '2px 9px', borderRadius: 20, background: 'rgba(244,114,182,0.24)', color: '#fce7f3', border: '1px solid rgba(244,114,182,0.45)' },
+  favNew: { flexShrink: 0, fontSize: 11, fontWeight: 600, padding: '2px 9px', borderRadius: 20, background: 'rgba(255,255,255,0.14)', color: 'rgba(255,255,255,0.92)', border: '1px solid rgba(255,255,255,0.22)' },
   progRow: { display: 'flex', alignItems: 'center', gap: 9 },
   time: { fontSize: 11, minWidth: 34, textAlign: 'center' },
   timeBig: { fontSize: 15, minWidth: 46 },
@@ -273,6 +285,7 @@ const s = {
   // 底部控制坞：把分散的喜欢/调味/对话/音量/换心情收成一条，全宽常驻
   dock: { display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', flexShrink: 0, paddingTop: 2 },
   pill: { display: 'inline-flex', alignItems: 'center', gap: 5, padding: '8px 12px', borderRadius: 14, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', color: '#e5e7eb', fontSize: 12.5, cursor: 'pointer', whiteSpace: 'nowrap' },
+  pillFav: { background: 'rgba(244,114,182,0.85)', border: '1px solid rgba(244,114,182,0.9)', color: '#fff' },
   div: { width: 1, height: 18, background: 'rgba(255,255,255,0.14)', margin: '0 2px' },
   steerWrap: { position: 'relative', flex: 1, minWidth: 200, display: 'flex', alignItems: 'center', gap: 6 },
   steerMic: { position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', display: 'flex' },

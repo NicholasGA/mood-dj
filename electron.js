@@ -358,6 +358,35 @@ ipcMain.handle('qq-get-favorites', async () => {
   } catch (e) { dlog('[fav] error', e.message); return null }
 })
 
+// ── 取"我喜欢"的全部 mid（用于标"已收藏/新歌"，避免重复收藏）。分页拉，调用方缓存 ──
+ipcMain.handle('qq-get-favorite-mids', async () => {
+  try {
+    const session = mainWindow.webContents.session
+    const allCookies = await session.cookies.get({})
+    const uin = resolveUin(allCookies)
+    if (uin === '0') return null
+    const cookieHeader = allCookies.filter(c => c.domain?.includes('qq.com')).map(c => `${c.name}=${c.value}`).join('; ')
+    const headers = { 'Referer': 'https://y.qq.com/', 'User-Agent': 'Mozilla/5.0', 'Cookie': cookieHeader }
+    const keyst = allCookies.find(c => c.name === 'qm_keyst')?.value || allCookies.find(c => c.name === 'qqmusic_key')?.value || ''
+    let g_tk = 5381; for (let i = 0; i < keyst.length; i++) g_tk += (g_tk << 5) + keyst.charCodeAt(i); g_tk &= 2147483647
+    const lj = await (await net.fetch(`https://c.y.qq.com/rsc/fcgi-bin/fcg_user_created_diss?hostuin=${uin}&sin=0&size=50&g_tk=${g_tk}&format=json&inCharset=utf8&outCharset=utf-8&notice=0&platform=yqq&needNewCode=0`, { headers })).json()
+    const disslist = (lj.data?.disslist || []).filter(d => d.tid && d.song_cnt > 0)
+    const fav = disslist.find(d => d.diss_name === '我喜欢') || disslist.sort((a, b) => b.song_cnt - a.song_cnt)[0]
+    if (!fav) return null
+    const tid = Number(fav.tid), total = fav.song_cnt, PAGE = 100
+    const mids = []
+    for (let begin = 0; begin < total && begin < 8000; begin += PAGE) {
+      const body = JSON.stringify({ comm: { ct: 19, cv: 1859, uin, format: 'json' }, req_1: { module: 'music.srfDissInfo.aiDissInfo', method: 'uniform_get_Dissinfo', param: { disstid: tid, tag: 1, userinfo: 0, song_begin: begin, song_num: PAGE } } })
+      const list = (await (await net.fetch('https://u.y.qq.com/cgi-bin/musicu.fcg', { method: 'POST', headers: { ...headers, 'Content-Type': 'application/json' }, body })).json()).req_1?.data?.songlist || []
+      if (!list.length) break
+      for (const s of list) if (s.mid) mids.push(s.mid)
+      if (list.length < PAGE) break
+    }
+    dlog('[fav-mids]', mids.length, '/', total)
+    return { favCount: total, mids }
+  } catch (e) { dlog('[fav-mids] error', e.message); return null }
+})
+
 // ── 把一首歌加入 QQ "我喜欢"(dirId 201) ───────────────────────────
 ipcMain.handle('qq-add-favorite', async (_e, songId) => {
   try {

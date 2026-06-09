@@ -40,6 +40,7 @@ export default function App() {
   const [showQueue, setShowQueue] = useState(false)   // 播放队列面板
   const [showPicker, setShowPicker] = useState(false)   // 播放中点"换心情"→ 回到选心情
   const [maximized, setMaximized] = useState(false)     // 最大化时去掉窗口圆角
+  const [favMids, setFavMids] = useState(() => new Set())   // "我喜欢"全部 mid（标已收藏/新歌）
   const [sleepMin, setSleepMin] = useState(0)   // 睡眠定时（分钟，0=关）
   const [sleepLeft, setSleepLeft] = useState('')   // 剩余 mm:ss
   const sleepEndRef = useRef(0)
@@ -137,6 +138,24 @@ export default function App() {
 
   // 窗口最大化状态（决定要不要圆角）
   useEffect(() => { window.electronAPI.onWinState?.(s => setMaximized(!!s?.maximized)) }, [])
+
+  // 载入"我喜欢"全部 mid（标已收藏/新歌）。先用本地缓存，缓存缺失或超 24h 才后台重拉
+  useEffect(() => {
+    if (!qqCookies) return
+    let cancelled = false
+    let cached = null
+    try { cached = JSON.parse(localStorage.getItem('mooddj-fav-mids') || 'null') } catch {}
+    if (cached?.mids?.length) setFavMids(new Set(cached.mids))
+    const stale = !cached?.mids?.length || (Date.now() - (cached.ts || 0)) > 24 * 3600 * 1000
+    if (stale) {
+      window.electronAPI.getQQFavoriteMids?.().then(res => {
+        if (cancelled || !res?.mids?.length) return
+        setFavMids(new Set(res.mids))
+        try { localStorage.setItem('mooddj-fav-mids', JSON.stringify({ favCount: res.favCount, mids: res.mids, ts: Date.now() })) } catch {}
+      }).catch(() => {})
+    }
+    return () => { cancelled = true }
+  }, [qqCookies])
 
   // 拉取/刷新 QQ 收藏（"我喜欢"等）：更新个性化样本 + 左上角收藏数
   const refreshFavCount = useCallback(() => {
@@ -680,9 +699,15 @@ export default function App() {
       saveMemory()
       setLikedCount(mem.likedTracks.length)
     }
-    showToast('❤️ 已加入「我喜欢的」')   // 本地一定成功，可随时在喜欢列表重听
-    // QQ"我喜欢"同步：主进程走签名版 musics.fcg，绝大多数歌（含以前 80105 的）都能成；个别下架/灰色歌跳过不打扰
-    if (cur.id) window.electronAPI.addQQFavorite(Number(cur.id)).then(ok => { if (ok) { showToast('❤️ 已同步到 QQ 我喜欢'); refreshFavCount() } }).catch(() => {})
+    // 已在 QQ 收藏就别重复收藏，只提示；否则本地加入 +（去重后）同步到 QQ我喜欢
+    if (favMids.has(cur.mid)) {
+      showToast('❤️ 这首已经在你的 QQ 收藏里啦')
+    } else {
+      showToast('❤️ 已加入「我喜欢的」')
+      if (cur.id) window.electronAPI.addQQFavorite(Number(cur.id)).then(ok => {
+        if (ok) { showToast('❤️ 已同步到 QQ 我喜欢'); refreshFavCount(); setFavMids(prev => new Set(prev).add(cur.mid)) }
+      }).catch(() => {})
+    }
   }
 
   // 从喜欢的歌里统计常听歌手，作为口味信号
@@ -848,6 +873,7 @@ export default function App() {
             queueCount={queue.length} nextTrack={queue[0]} upNext={queue} lyric={lyric} moodConfig={moodConfig}
             story={memoryRef.current.songStories?.[currentTrack.mid] || localStory(currentTrack)}
             djName={getPersona()?.name} analyser={analyserRef} volume={volume} onVolume={setUserVolume}
+            inFav={favMids.has(currentTrack.mid)}
             onRepick={() => setShowPicker(true)}
           />
         ) : (
