@@ -302,6 +302,7 @@ function MoodGauge({ label, v, accent, onCommit }) {
   const commitEdit = () => {
     const n = Math.max(0, Math.min(100, parseInt(editVal, 10) || 0))
     setEditing(false)
+    setValHover(false)                   // 编辑时 span 被 input 顶替、mouseLeave 不会触发 → 退出时手动清掉悬停态
     if (n !== pct) onCommit?.(n / 100)   // 值没变就不重新换歌
   }
   const ratioFromEvent = (e) => {
@@ -351,7 +352,7 @@ function MoodGauge({ label, v, accent, onCommit }) {
             if (e.key === 'Enter') e.target.blur()                              // 触发 onBlur 提交
             else if (e.key === 'Escape') { cancelRef.current = true; e.target.blur() }
           }}
-          onBlur={() => { if (cancelRef.current) { cancelRef.current = false; setEditing(false) } else commitEdit() }}
+          onBlur={() => { if (cancelRef.current) { cancelRef.current = false; setEditing(false); setValHover(false) } else commitEdit() }}
           style={s.gValInput}
         />
       ) : (
