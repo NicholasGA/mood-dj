@@ -681,11 +681,14 @@ export default function App() {
   const accent2 = albumColors?.secondary || moodConfig?.color_secondary || '#1db954'
   const vizMood = moodConfig ? { ...moodConfig, color_primary: accent, color_secondary: accent2 } : null
   const ambientArt = currentTrack?.album?.images?.[0]?.url
+  // 呼吸/漂移周期：能量越高越快（约 5s~9s）。停播时放慢，像静息呼吸。
+  const energy = isPlaying ? (moodConfig?.energy ?? 0.5) : 0.2
+  const breath = `${(9 - energy * 4).toFixed(1)}s`
 
   // 迷你播放器模式：整窗渲染紧凑卡片（音频/状态共用，不中断播放）
   if (miniMode) {
     return (
-      <div style={{ '--accent': accent, position: 'fixed', inset: 0, background: '#0a0a0a', overflow: 'hidden' }}>
+      <div style={{ '--accent': accent, position: 'fixed', inset: 0, background: 'linear-gradient(180deg, rgba(12,12,16,0.52), rgba(8,8,12,0.74))', overflow: 'hidden' }}>
         <MiniPlayer
           track={currentTrack} isPlaying={isPlaying} audioRef={audioRef}
           accent={accent} accent2={accent2} lyric={lyric} analyser={analyserRef}
@@ -696,7 +699,7 @@ export default function App() {
   }
 
   return (
-    <div style={{ '--accent': accent, '--accent2': accent2, ...styles.root }}>
+    <div style={{ '--accent': accent, '--accent2': accent2, '--breath': breath, ...styles.root }}>
       {ambientArt && <img src={ambientArt} alt="" aria-hidden style={styles.ambient} key={ambientArt} />}
       {ambientArt && <div style={styles.ambientVeil} aria-hidden />}
       <div style={styles.titleBar}>
@@ -778,10 +781,12 @@ export default function App() {
 }
 
 const styles = {
-  root: { height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', fontFamily: 'system-ui,sans-serif', color: '#f9fafb', background: '#0a0a0a' },
-  ambient: { position: 'fixed', inset: '-10%', width: '120%', height: '120%', objectFit: 'cover', filter: 'blur(46px) saturate(1.8) brightness(0.95)', opacity: 0.9, zIndex: 0, pointerEvents: 'none', transform: 'scale(1.1)', animation: 'ambientIn 1.1s ease' },
-  ambientVeil: { position: 'fixed', inset: 0, zIndex: 0, pointerEvents: 'none', background: 'radial-gradient(ellipse at 50% 42%, rgba(10,10,10,0.04) 0%, rgba(10,10,10,0.42) 58%, rgba(10,10,10,0.82) 100%)' },
-  titleBar: { height: 40, display: 'flex', alignItems: 'center', padding: '0 16px', gap: 12, flexShrink: 0, background: 'rgba(10,10,10,0.85)', backdropFilter: 'blur(12px)', borderBottom: '1px solid rgba(255,255,255,0.06)', zIndex: 50, WebkitAppRegion: 'drag', userSelect: 'none' },
+  // 半透明深色层 + 顶部心情色辉光：让 Mica 桌面隐约透出（无形感），同时压暗保证可读（氛围感）
+  root: { height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', fontFamily: 'system-ui,sans-serif', color: '#f9fafb', background: 'radial-gradient(125% 80% at 50% -12%, color-mix(in srgb, var(--accent) 17%, transparent) 0%, transparent 56%), linear-gradient(180deg, rgba(9,9,14,0.60) 0%, rgba(7,7,11,0.86) 100%)' },
+  // 专辑封面氛围背景：缓慢漂移呼吸，跟着音乐"活着"
+  ambient: { position: 'fixed', inset: '-12%', width: '124%', height: '124%', objectFit: 'cover', filter: 'blur(52px) saturate(1.8) brightness(0.9)', opacity: 0.82, zIndex: 0, pointerEvents: 'none', animation: 'ambientIn 1.2s ease, drift var(--breath,7s) ease-in-out infinite' },
+  ambientVeil: { position: 'fixed', inset: 0, zIndex: 0, pointerEvents: 'none', background: 'radial-gradient(ellipse at 50% 42%, rgba(9,9,12,0.02) 0%, rgba(9,9,12,0.40) 58%, rgba(7,7,11,0.84) 100%)' },
+  titleBar: { height: 40, display: 'flex', alignItems: 'center', padding: '0 16px', gap: 12, flexShrink: 0, background: 'rgba(12,12,16,0.42)', backdropFilter: 'blur(16px)', borderBottom: '1px solid rgba(255,255,255,0.05)', zIndex: 50, WebkitAppRegion: 'drag', userSelect: 'none' },
   appName: { fontSize: 14, fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 7 },
   tag: { fontSize: 11, padding: '2px 10px', borderRadius: 20, fontWeight: 500 },
   favTag: { fontSize: 11, padding: '2px 10px', borderRadius: 20, fontWeight: 500, background: 'rgba(244,114,182,0.15)', color: '#f9a8d4', display: 'inline-flex', alignItems: 'center', gap: 4 },

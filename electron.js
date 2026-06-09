@@ -36,7 +36,11 @@ let mainWindow
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1280, height: 820, minWidth: 960, minHeight: 660,
-    frame: false, backgroundColor: '#0a0a0a',
+    frame: false,
+    // 注：本想用 Win11 Mica(透明窗口透出桌面)做"无形感"，但本应用 UI 大量用 backdrop-filter
+    // 毛玻璃，透明窗口下 Chromium 合成器会丢掉这些图层→整屏只剩纯文字。故保持不透明深色，
+    // "氛围感/呼吸感"改由应用内渐变+呼吸动画+专辑色实现（不依赖窗口透明）。
+    backgroundColor: '#0a0a0a',
     icon: path.join(__dirname, 'build', 'icon.png'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),

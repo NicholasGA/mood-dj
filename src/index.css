@@ -7,6 +7,7 @@
 
 html, body, #root {
   height: 100%;
+  /* 不透明深色底（窗口本身也不透明）。氛围渐变由 App 根节点叠加，专辑色会染上来。 */
   background: #0a0a0a;
   color: #f9fafb;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
@@ -87,6 +88,26 @@ input:focus, textarea:focus {
 /* 专辑封面轻微漂浮 */
 @keyframes floaty { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-7px); } }
 .floaty { animation: floaty 5s ease-in-out infinite; }
+
+/* 呼吸感：极缓的明暗+缩放脉动，周期由 --breath 控制（能量越高越快）。
+   只动 opacity/transform，GPU 友好；prefers-reduced-motion 下停掉。 */
+@keyframes breathe {
+  0%, 100% { opacity: .82; transform: scale(1); }
+  50%      { opacity: 1;   transform: scale(1.012); }
+}
+.breathe { animation: breathe var(--breath, 7s) cubic-bezier(.45,0,.55,1) infinite; }
+
+/* 氛围光晕缓慢漂移，让背景"活着"而不是静止 */
+@keyframes drift {
+  0%   { transform: translate3d(0,0,0) scale(1.05); }
+  50%  { transform: translate3d(2%, -1.5%, 0) scale(1.12); }
+  100% { transform: translate3d(0,0,0) scale(1.05); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .breathe, .floaty { animation: none !important; }
+  *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; }
+}
 
 /* 卡片悬停微抬升 */
 .card-hover { transition: box-shadow .3s ease, transform .3s ease; }
