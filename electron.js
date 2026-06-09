@@ -123,7 +123,7 @@ ipcMain.handle('openrouter-oauth', () => new Promise((resolve) => {
   const b64url = (buf) => buf.toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
   const verifier = b64url(crypto.randomBytes(32))
   const challenge = b64url(crypto.createHash('sha256').update(verifier).digest())
-  const CB = 'http://localhost/mooddj-openrouter-callback'   // 不会真加载，靠 will-redirect 拦截取 code
+  const CB = 'https://localhost:3000/mooddj-openrouter-callback'   // OpenRouter 只认 https 且端口 443/3000；不会真加载，靠 will-redirect 拦截取 code
   const authUrl = `https://openrouter.ai/auth?callback_url=${encodeURIComponent(CB)}&code_challenge=${challenge}&code_challenge_method=S256`
   let settled = false
   const popup = new BrowserWindow({ width: 460, height: 720, parent: mainWindow, webPreferences: { nodeIntegration: false, contextIsolation: true } })
