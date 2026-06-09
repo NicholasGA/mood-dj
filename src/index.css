@@ -130,17 +130,15 @@ input:focus, textarea:focus {
   text-shadow: 0 0 14px color-mix(in srgb, currentColor 65%, transparent), 0 0 4px color-mix(in srgb, currentColor 40%, transparent);
 }
 
-/* 换心情浮窗：像水从心情卡那侧"流到一边"再摊成面板。
-   transformOrigin 由 JS 指到贴着心情卡的那个角；scaleX 从极窄(.08)拉到 1 = 水往外流的方向感，
-   scaleY 小幅展开；border-radius 从水珠(圆)经不规则态收成面板圆角(28，与心情卡一致)。
-   overflow:hidden 让形变期间把液体层裁成流动的水形。 */
+/* 换心情浮窗：从心情卡那侧"流"出来摊成面板。
+   只动 transform + opacity（GPU 合成层，丝滑）——不再动 border-radius(圆角全程固定 28，避免每帧重绘+
+   重新裁剪带模糊的液体层)。transformOrigin 由 JS 指到贴着心情卡的角；scaleX 从 .45 拉到 1 = 水往外流的方向感。 */
 @keyframes liquidFlowIn {
-  0%   { opacity: 0; transform: scaleX(.08) scaleY(.5);  border-radius: 50%; }
-  34%  { opacity: 1; transform: scaleX(.46) scaleY(.84); border-radius: 58% 42% 52% 48% / 62% 52% 48% 38%; }
-  70%  { opacity: 1; transform: scaleX(1.04) scaleY(1.02); border-radius: 40% 32% 34% 38% / 44%; }
-  100% { transform: scaleX(1) scaleY(1); border-radius: 28px; }
+  0%   { opacity: 0; transform: scaleX(.45) scaleY(.9); }
+  55%  { opacity: 1; }
+  100% { opacity: 1; transform: scaleX(1) scaleY(1); }
 }
-.liquid-flow-in { animation: liquidFlowIn .52s cubic-bezier(.34,1.22,.5,1) both; }
+.liquid-flow-in { animation: liquidFlowIn .46s cubic-bezier(.16, 1, .3, 1) both; will-change: transform, opacity; }
 @media (prefers-reduced-motion: reduce) { .liquid-flow-in { animation: none !important; } }
 
 /* 换心情浮窗里的描述输入：在亮 accent 面板上保持深色可读（盖掉全局 input:focus 的白底） */
