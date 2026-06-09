@@ -162,13 +162,3 @@ export async function getLyric(songmid) {
   const choruses = detectChoruses(lines)
   return { lines, choruses, hasTrans }
 }
-
-// ── Check login validity ──────────────────────────────────────────
-export async function checkLogin(cookies) {
-  try {
-    const results = await searchTracks(cookies, 'test', 1)
-    return results.length >= 0
-  } catch {
-    return false
-  }
-}

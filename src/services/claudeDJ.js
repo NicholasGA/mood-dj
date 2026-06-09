@@ -223,7 +223,7 @@ export async function curateTracks(tracks, moodConfig, energy, valence, favArtis
 ${numbered}
 
 任务：挑出最贴合该心情/能量/情绪、并尽量符合用户口味的歌，剔除明显不搭的（如低落心情里的蹦迪神曲、放松心情里的硬核摇滚），按适合电台连续收听的流畅顺序排列，尽量 15-25 首。
-返回JSON：{"order":[编号,编号,...]}`, { retries: 1, maxTokens: 900, temperature: 0.7 })
+返回JSON：{"order":[编号,编号,...]}`, { maxTokens: 900, temperature: 0.7 })
 
   const m = raw.match(/\{[\s\S]*\}/)
   if (!m) throw new Error('curate failed')
@@ -261,27 +261,6 @@ ${list}
   if (!m) throw new Error('taste failed')
   const j = JSON.parse(m[0])
   return { personality: j.personality || '', genres: j.genres || [], moods: j.moods || [], artists: j.artists || [], explore: j.explore || '' }
-}
-
-// 自动 vibe 分组：把喜欢的歌按氛围聚成几组
-export async function clusterLikes(tracks) {
-  const pool = (tracks || []).slice(-50)
-  if (pool.length < 4) return []
-  const numbered = pool.map((t, i) => `${i + 1}. ${t.name} - ${t.artists?.map(a => a.name).join('/') || ''}`).join('\n')
-  const system = `你是歌单编辑，擅长按氛围/场景把歌分组。只输出JSON，不要解释。`
-  const raw = await gemini(system, `
-歌曲：
-${numbered}
-
-按氛围/场景分成 3-5 组（如 深夜/通勤燃/治愈/派对/专注…），每组给名字、一个emoji、该组的编号。每首尽量只进最合适的一组。
-返回JSON：{"groups":[{"name":"组名2-5字","emoji":"单emoji","idx":[编号,...]}]}`, { retries: 1, maxTokens: 800, temperature: 0.6 })
-  const m = raw.match(/\{[\s\S]*\}/)
-  if (!m) throw new Error('cluster failed')
-  const j = JSON.parse(m[0])
-  return (j.groups || []).map(g => ({
-    name: g.name, emoji: g.emoji || '🎵',
-    tracks: (g.idx || []).map(n => pool[n - 1]).filter(Boolean),
-  })).filter(g => g.tracks.length)
 }
 
 // 单首歌一句话「故事」：结合歌词点出情绪/主题/创作背景。调用方按 mid 永久缓存复用 → 省配额

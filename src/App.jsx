@@ -48,7 +48,8 @@ export default function App() {
     toastTimer.current = setTimeout(() => setToast(''), 2200)
   }, [])
 
-  const audioRef = useRef(new Audio())
+  const audioRef = useRef(null)
+  if (!audioRef.current) audioRef.current = new Audio()   // 懒建一次，避免每次 render 都 new Audio()
   const queueRef = useRef([])
   const currentTrackRef = useRef(null)
   const moodConfigRef = useRef(null)
@@ -478,15 +479,15 @@ export default function App() {
       if (memoryRef.current.likedTracks.length) add(memoryRef.current.likedTracks.slice(-30))
 
       // 1) 单曲搜索（并发，翻较深页：避开第 1 页口水热门，更新鲜）
-      ok(await Promise.allSettled(queries.map(q => searchTracks(qqCookies, q, 15, 2 + Math.floor(Math.random() * 6)))))
+      ok(await Promise.allSettled(queries.map(q => searchTracks(qqCookiesRef.current, q, 15, 2 + Math.floor(Math.random() * 6)))))
 
       // 2) 歌单源（并发）：搜人工歌单 → 挑歌量充足的几个 → 捞歌进池
-      const plLists = await Promise.allSettled((config.search_queries || []).slice(0, 2).map(q => searchPlaylists(qqCookies, q, 6)))
+      const plLists = await Promise.allSettled((config.search_queries || []).slice(0, 2).map(q => searchPlaylists(qqCookiesRef.current, q, 6)))
       const picked = []
       plLists.forEach(r => r.status === 'fulfilled' && r.value.slice(0, 3).forEach(p => { if (!picked.includes(p.id)) picked.push(p.id) }))
       // 3) 你的收藏歌单也并入来源（无限补歌时会从你的收藏里继续捞）
       const playlistIds = [...picked.slice(0, 4), ...(fav?.playlistIds || []).slice(0, 3)]
-      ok(await Promise.allSettled(playlistIds.map(id => getPlaylistTracks(qqCookies, id, 50))))
+      ok(await Promise.allSettled(playlistIds.map(id => getPlaylistTracks(qqCookiesRef.current, id, 50))))
 
       if (allTracks.length === 0) throw new Error('未找到匹配曲目，请换个描述')
 
