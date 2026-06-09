@@ -66,6 +66,7 @@ export default function NowPlayingBento({
   const [shufHover, setShufHover] = useState(false)
   const [steerText, setSteerText] = useState('')
   const barRef = useRef(null)
+  const moodTileRef = useRef(null)   // 换心情浮窗从这张卡的位置长出来
 
   useEffect(() => {
     const audio = audioRef?.current
@@ -182,12 +183,12 @@ export default function NowPlayingBento({
               <MiniWave analyser={analyser} color={`color-mix(in srgb, ${pal.energy} 50%, #ffffff)`} isPlaying={isPlaying} />
               <div style={s.tValRow}><span className="led" style={s.tLed}>{Math.round(energy * 100)}</span><span style={s.tUnit}>能量</span></div>
             </div>
-            <div style={{ ...vivid(accent, accent2, 28), ...s.tile, ...clip }}>
+            <div ref={moodTileRef} style={{ ...vivid(accent, accent2, 28), ...s.tile, ...clip }}>
               <LiquidLayer accent={accent} seed={`${seed}-m`} opacity={0.42} />
               <div style={s.tLabel}>心情</div>
               <div
                 style={{ ...s.moodMain, ...(moodHover ? { background: 'rgba(255,255,255,0.13)' } : null) }}
-                onClick={onRepick} title="点这里换个心情" role="button"
+                onClick={() => onRepick?.(moodTileRef.current?.getBoundingClientRect())} title="点这里换个心情" role="button"
                 onMouseEnter={() => setMoodHover(true)}
                 onMouseLeave={() => setMoodHover(false)}
               >

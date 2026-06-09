@@ -972,7 +972,7 @@ export default function App() {
             story={memoryRef.current.songStories?.[currentTrack.mid] || localStory(currentTrack)}
             djName={getPersona()?.name} analyser={analyserRef} volume={volume} onVolume={setUserVolume}
             inFav={favMids.has(currentTrack.mid)}
-            onRepick={(e) => setMoodPopAt({ x: e?.clientX ?? 200, y: e?.clientY ?? 200 })}
+            onRepick={(rect) => setMoodPopAt(rect)}
             repeatOne={repeatOne} onToggleRepeat={() => setRepeatOne(v => !v)}
           />
         ) : (
@@ -1010,8 +1010,9 @@ export default function App() {
 
       {moodPopAt && (
         <MoodSwitcher
-          anchor={moodPopAt}
+          anchorRect={moodPopAt}
           accent={accent}
+          seed={currentTrack?.mid || currentTrack?.name || 'mood'}
           isLoading={isLoading}
           onClose={() => setMoodPopAt(null)}
           onPick={(t, e, v) => { setMoodPopAt(null); startRadio(t, e, v) }}
