@@ -49,11 +49,9 @@ function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1280, height: 820, minWidth: 960, minHeight: 660,
     frame: false, center: true,
-    // 无形感：透明窗口，桌面壁纸从 App 的半透明表面透出。
-    // 前提是 UI 不能用 backdrop-filter 毛玻璃（透明窗口下 Chromium 会丢弃这些图层），
-    // 故所有卡片/栏都改成"半透明纯色"而非模糊玻璃。
-    transparent: true,
-    backgroundColor: '#00000000',
+    // 不透明实底（去掉了 transparent:true）：拖拽缩放/最大化顺滑、抓边直观、还原不隐形。
+    // 代价是不再透出桌面壁纸；液体/可视化/专辑色氛围都画在窗口内、全部保留。
+    backgroundColor: '#0a0b12',
     icon: path.join(__dirname, 'build', 'icon.png'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -499,13 +497,9 @@ ipcMain.on('win-close',    () => mainWindow.close())
 // 透明窗 Windows 坑：从小尺寸(迷你/壁龛)放大还原后，新增区域常不重绘 → 整窗透明=隐形。
 // show() 对已显示窗口不强制重绘，故还原后 invalidate + 抖 1px 逼 Windows 整窗重画。
 function showAndRepaint() {
+  // 不透明实底窗口放大不再有"隐形/不重绘"问题 → 直接显示聚焦即可（不需再抖 opacity/最小化还原）。
   if (!mainWindow || mainWindow.isDestroyed()) return
-  // 透明窗从小尺寸放大后 Chromium 不重建合成面 → 放大区域透明=隐形。
-  // 抖一下整窗 opacity 逼重新合成（比"最小化→还原"顺，无任务栏闪一下）。
   mainWindow.show(); mainWindow.focus()
-  mainWindow.setOpacity(0.99)
-  setTimeout(() => { if (mainWindow && !mainWindow.isDestroyed()) mainWindow.setOpacity(1) }, 32)
-  try { mainWindow.webContents.invalidate() } catch {}
 }
 
 // ── 迷你播放器：把主窗口切成置顶小窗 / 还原 ───────────────────────

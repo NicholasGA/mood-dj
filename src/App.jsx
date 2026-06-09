@@ -866,13 +866,8 @@ export default function App() {
 
   return (
     <div style={{ '--accent': accent, '--accent2': accent2, '--breath': breath, ...styles.shell, padding: 0 }}>
-    <div style={{ ...styles.root,
-      // 最大化：背景转不透明铺满（否则透明窗四周透出桌面=一圈空白）；窗口模式保留半透明"无形感"
-      background: maximized
-        ? 'radial-gradient(130% 90% at 50% -14%, color-mix(in srgb, var(--accent) 30%, transparent) 0%, transparent 54%), radial-gradient(120% 70% at 50% 116%, color-mix(in srgb, var(--accent2) 22%, transparent) 0%, transparent 50%), linear-gradient(180deg, #0c0c14 0%, #06060b 100%)'
-        : styles.root.background,
-      // 卡片填满窗口（padding:0）→ 拖拽边贴可见边；外阴影会被窗口裁成方框故去掉，只留内高光+细边
-      borderRadius: maximized ? 0 : 20, border: maximized ? 'none' : '1px solid rgba(255,255,255,0.06)', boxShadow: maximized ? 'none' : 'inset 0 1px 0 rgba(255,255,255,0.12)' }}>
+    {/* 不透明实底窗口：直接铺满，无圆角/边框/外阴影的"浮起"处理（那些是为透明窗准备的） */}
+    <div style={styles.root}>
       {ambientArt && <img src={ambientArt} alt="" aria-hidden style={styles.ambient} key={ambientArt} />}
       {ambientArt && <div style={styles.ambientVeil} aria-hidden />}
       <div style={{ ...styles.titleBar, WebkitAppRegion: maximized ? 'no-drag' : 'drag' }}>
@@ -969,7 +964,7 @@ const styles = {
   // position:relative + overflow:hidden 让圆角能裁住里面的氛围背景/可视化。
   // shell = 整个透明窗口，留内边距让里面的卡片浮起来（带投影）；最大化时 padding 归 0
   shell: { height: '100vh', boxSizing: 'border-box', background: 'transparent' },
-  root: { position: 'relative', height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden', fontFamily: 'system-ui,sans-serif', color: '#f9fafb', background: 'radial-gradient(130% 90% at 50% -14%, color-mix(in srgb, var(--accent) 26%, transparent) 0%, transparent 54%), radial-gradient(120% 70% at 50% 116%, color-mix(in srgb, var(--accent2) 16%, transparent) 0%, transparent 50%), linear-gradient(180deg, rgba(10,10,15,0.46) 0%, rgba(6,6,10,0.74) 100%)' },
+  root: { position: 'relative', height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden', fontFamily: 'system-ui,sans-serif', color: '#f9fafb', background: 'radial-gradient(130% 90% at 50% -14%, color-mix(in srgb, var(--accent) 28%, transparent) 0%, transparent 54%), radial-gradient(120% 70% at 50% 116%, color-mix(in srgb, var(--accent2) 18%, transparent) 0%, transparent 50%), linear-gradient(180deg, #0c0c14 0%, #06060b 100%)' },
   // 专辑封面氛围背景：缓慢漂移呼吸，跟着音乐"活着"（absolute 以便被根节点圆角裁住）
   ambient: { position: 'absolute', inset: '-12%', width: '124%', height: '124%', objectFit: 'cover', filter: 'blur(52px) saturate(1.8) brightness(0.9)', opacity: 0.82, zIndex: 0, pointerEvents: 'none', animation: 'ambientIn 1.2s ease, drift var(--breath,7s) ease-in-out infinite' },
   ambientVeil: { position: 'absolute', inset: 0, zIndex: 0, pointerEvents: 'none', background: 'radial-gradient(ellipse at 50% 42%, rgba(9,9,12,0.02) 0%, rgba(9,9,12,0.40) 58%, rgba(7,7,11,0.84) 100%)' },
