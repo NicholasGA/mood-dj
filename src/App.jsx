@@ -729,6 +729,25 @@ export default function App() {
     } finally { setLoadingTrack(false) }
   }
 
+  // 「接下来」换一批：用当前电台关键词重新搜一批同心情的全新歌，替换接下来的队列（当前播放不变）
+  async function shuffleUpNext() {
+    const ctx = radioRef.current
+    if (!ctx) return
+    setLoadingTrack(true)
+    try {
+      const fresh = []
+      const disliked = (t) => ctx.disliked && (t.artists || []).some(a => ctx.disliked.has(a.name))
+      const add = (arr) => { for (const t of arr || []) if (t?.mid && !ctx.seen.has(t.mid) && !disliked(t)) { ctx.seen.add(t.mid); fresh.push(t) } }
+      await Promise.allSettled((ctx.queries || []).slice(0, 4).map(q =>
+        searchTracks(qqCookiesRef.current, q, 15, 2 + Math.floor(Math.random() * 6)).then(add).catch(() => {})))
+      let picked = freshen(fresh, new Set(memoryRef.current.recentMids || []), { maxPer: 2, min: 5 })
+      picked.sort(() => Math.random() - 0.5)
+      if (!picked.length) { showToast('没找到更多，再试一次'); return }
+      queueRef.current = picked; setQueue(picked)
+      showToast('🔀 接下来换了一批')
+    } finally { setLoadingTrack(false) }
+  }
+
   function dislikeCurrent() {
     const ctx = radioRef.current, cur = currentTrackRef.current
     if (!ctx || !cur) return
@@ -946,7 +965,7 @@ export default function App() {
             track={currentTrack} isPlaying={isPlaying} loadingTrack={loadingTrack} audioRef={audioRef}
             accent={accent} accent2={accent2}
             onTogglePlay={togglePlay} onNext={playNext} onLike={likeCurrent} onDislike={dislikeCurrent}
-            onVibe={adjustVibe} onSteer={steerRadio} onOpenQueue={() => setShowQueue(true)} onPlayAt={queuePlayAt} onSetVibe={setVibeManual}
+            onVibe={adjustVibe} onSteer={steerRadio} onOpenQueue={() => setShowQueue(true)} onPlayAt={queuePlayAt} onSetVibe={setVibeManual} onShuffleNext={shuffleUpNext}
             queueCount={queue.length} nextTrack={queue[0]} upNext={queue} lyric={lyric} moodConfig={moodConfig}
             story={memoryRef.current.songStories?.[currentTrack.mid] || localStory(currentTrack)}
             djName={getPersona()?.name} analyser={analyserRef} volume={volume} onVolume={setUserVolume}

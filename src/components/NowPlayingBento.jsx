@@ -52,7 +52,7 @@ function MiniWave({ analyser, color, isPlaying }) {
 
 export default function NowPlayingBento({
   track, isPlaying, loadingTrack, audioRef, accent = '#31c27c', accent2 = '#4f46e5',
-  onTogglePlay, onNext, onLike, onDislike, onVibe, onSteer, onOpenQueue, onPlayAt, onSetVibe,
+  onTogglePlay, onNext, onLike, onDislike, onVibe, onSteer, onOpenQueue, onPlayAt, onSetVibe, onShuffleNext,
   queueCount = 0, nextTrack, upNext = [], lyric, moodConfig, story, djName, analyser, volume = 0.8, onVolume, onRepick, inFav = false,
   repeatOne = false, onToggleRepeat,
 }) {
@@ -62,6 +62,8 @@ export default function NowPlayingBento({
   const [barHover, setBarHover] = useState(false)   // 鼠标悬停进度条 → 展开高亮，明确"已移到可拖区"
   const [hoverRow, setHoverRow] = useState(null)    // 待播列表悬停的行 → 高亮 + 序号变播放键，点一下直切
   const [moodHover, setMoodHover] = useState(false) // 悬停心情名 → 高亮，提示可点换心情
+  const [shufSpin, setShufSpin] = useState(0)       // 「换一批」点一下图标转一圈
+  const [shufHover, setShufHover] = useState(false)
   const [steerText, setSteerText] = useState('')
   const barRef = useRef(null)
 
@@ -204,8 +206,18 @@ export default function NowPlayingBento({
           <div style={{ ...vividDark(pal.next, 28), ...s.tile, flex: 1, ...clip }}>
             <LiquidLayer accent={pal.next} seed={`${seed}-n`} opacity={0.32} />
             <div style={s.upHead}>
-              <span style={s.tLabel}>接下来</span>
-              <span style={s.upManage} onClick={onOpenQueue} title="展开管理：重排 / 移除">{queueCount} 首 · 管理 ›</span>
+              <span style={s.tLabel}>接下来 · {queueCount}</span>
+              <span style={s.upHeadActions}>
+                <span
+                  style={{ ...s.upAction, ...(shufHover ? s.upActionHover : null) }}
+                  onClick={() => { setShufSpin(n => n + 1); onShuffleNext?.() }}
+                  onMouseEnter={() => setShufHover(true)} onMouseLeave={() => setShufHover(false)}
+                  title="换一批同款新歌"
+                >
+                  <Icon name="shuffle" size={12} color={shufHover ? '#fff' : '#9fb3c8'} style={{ transform: `rotate(${shufSpin * 360}deg)`, transition: 'transform .55s cubic-bezier(.22,.61,.36,1)' }} /> 换一批
+                </span>
+                <span style={s.upManage} onClick={onOpenQueue} title="展开管理：重排 / 移除">管理 ›</span>
+              </span>
             </div>
             <div style={s.upList} className="lyrics-scroll">
               {upNext.slice(0, 30).map((t, i) => {
@@ -259,21 +271,16 @@ export default function NowPlayingBento({
         <button style={{ ...s.pill, ...(inFav ? s.pillFav : { color: '#f9a8d4', borderColor: '#f472b640' }) }} onClick={onLike} title={inFav ? '已在 QQ 收藏' : '加入 QQ 我喜欢'}><Icon name="heart" size={14} color="#fff" filled /> {inFav ? '已收藏' : '喜欢'}</button>
         <button style={s.pill} onClick={onDislike}><Icon name="thumbsDown" size={14} color="#cbd5e1" /> 不喜欢</button>
         <span style={s.div} />
-        <button style={s.pill} onClick={() => onVibe('up')}><Icon name="flame" size={14} color="#fb923c" /> 嗨</button>
-        <button style={s.pill} onClick={() => onVibe('down')}><Icon name="moon" size={14} color="#93c5fd" /> 静</button>
-        <button style={s.pill} onClick={() => onVibe('flavor')}><Icon name="shuffle" size={14} color="#c4b5fd" /> 换</button>
         <div style={s.steerWrap}>
           <span style={s.steerMic}><Icon name="mic" size={15} color="#9ca3af" /></span>
           <input style={s.steerInput} placeholder="跟 DJ 说…「放点周杰伦但安静的」" value={steerText}
             onChange={e => setSteerText(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter' && steerText.trim()) { onSteer(steerText.trim()); setSteerText('') } }} />
-          <button style={{ ...s.steerBtn, background: accent, opacity: steerText.trim() ? 1 : 0.5 }} disabled={!steerText.trim()}
-            onClick={() => { if (steerText.trim()) { onSteer(steerText.trim()); setSteerText('') } }}>换</button>
+          <button style={{ ...s.steerBtn, background: accent, opacity: steerText.trim() ? 1 : 0.5 }} disabled={!steerText.trim()} title="发给 DJ"
+            onClick={() => { if (steerText.trim()) { onSteer(steerText.trim()); setSteerText('') } }}><Icon name="send" size={15} color="#fff" /></button>
         </div>
         <span style={s.volIcon}><Icon name="volume" size={15} color="#9ca3af" /></span>
         <input type="range" min={0} max={100} value={Math.round(volume * 100)} onChange={e => onVolume?.(Number(e.target.value) / 100)} className="mood-slider" style={{ width: 80, flexShrink: 0 }} />
-        <span style={s.div} />
-        <button style={s.pill} onClick={onRepick} title="重新选心情/换台"><Icon name="refresh" size={14} color="#9ca3af" /> 换心情</button>
       </div>
     </div>
   )
@@ -377,8 +384,11 @@ const s = {
   gVal: { fontSize: 14, color: '#fff', width: 26, textAlign: 'right', flexShrink: 0 },
 
   ph2: { background: 'rgba(255,255,255,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 },
-  upHead: { display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' },
+  upHead: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
   upCount: { fontSize: 11.5, color: '#9fb3c8' },
+  upHeadActions: { display: 'flex', alignItems: 'center', gap: 7, flexShrink: 0 },
+  upAction: { display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11.5, color: '#9fb3c8', cursor: 'pointer', padding: '3px 9px', borderRadius: 8, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.10)', transition: 'background .15s ease, color .15s ease' },
+  upActionHover: { background: 'rgba(255,255,255,0.14)', color: '#fff' },
   upManage: { fontSize: 11.5, color: '#9fb3c8', cursor: 'pointer', flexShrink: 0, padding: '2px 4px', borderRadius: 6 },
   upList: { flex: 1, minHeight: 0, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 3, marginTop: 6, paddingRight: 4 },
   upRow: { display: 'flex', alignItems: 'center', gap: 9, padding: '5px 8px', margin: '0 -4px', borderRadius: 10, cursor: 'pointer', transition: 'background .14s ease' },
@@ -400,6 +410,6 @@ const s = {
   steerWrap: { position: 'relative', flex: 1, minWidth: 200, display: 'flex', alignItems: 'center', gap: 6 },
   steerMic: { position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', display: 'flex' },
   steerInput: { flex: 1, minWidth: 0, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 12, padding: '9px 12px 9px 34px', color: '#f9fafb', fontSize: 13, outline: 'none' },
-  steerBtn: { flexShrink: 0, padding: '0 15px', height: 36, borderRadius: 12, border: 'none', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer' },
+  steerBtn: { flexShrink: 0, width: 40, height: 36, borderRadius: 12, border: 'none', color: '#fff', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' },
   volIcon: { display: 'flex', flexShrink: 0, marginLeft: 4 },
 }
