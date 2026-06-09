@@ -500,12 +500,11 @@ ipcMain.on('win-close',    () => mainWindow.close())
 // show() 对已显示窗口不强制重绘，故还原后 invalidate + 抖 1px 逼 Windows 整窗重画。
 function showAndRepaint() {
   if (!mainWindow || mainWindow.isDestroyed()) return
-  // 透明窗从小尺寸放大后，Chromium 不会重建合成面 → 放大区域全透明=隐形。
-  // 最小化再还原能逼 Windows 整窗重新合成（比 setBounds 抖尺寸 / hide-show 都可靠）。
-  mainWindow.show()
-  mainWindow.minimize()
-  mainWindow.restore()
-  mainWindow.focus()
+  // 透明窗从小尺寸放大后 Chromium 不重建合成面 → 放大区域透明=隐形。
+  // 抖一下整窗 opacity 逼重新合成（比"最小化→还原"顺，无任务栏闪一下）。
+  mainWindow.show(); mainWindow.focus()
+  mainWindow.setOpacity(0.99)
+  setTimeout(() => { if (mainWindow && !mainWindow.isDestroyed()) mainWindow.setOpacity(1) }, 32)
   try { mainWindow.webContents.invalidate() } catch {}
 }
 
