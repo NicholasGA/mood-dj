@@ -2,10 +2,10 @@ import { useState, useEffect, useRef } from 'react'
 import Lyrics from './Lyrics'
 import Icon from './Icon'
 
-export default function NowPlaying({ track, isPlaying, loadingTrack, audioRef, onNext, queueCount, onTogglePlay, lyric, accent = '#31c27c', onVibe, onDislike, onSteer, onLike, onOpenQueue }) {
+export default function NowPlaying({ track, isPlaying, loadingTrack, audioRef, onNext, queueCount, onTogglePlay, lyric, accent = '#31c27c', onVibe, onDislike, onSteer, onLike, onOpenQueue, volume = 0.8, onVolume }) {
   const [progress, setProgress] = useState(0)
   const [dur, setDur] = useState(0)
-  const [vol, setVol] = useState(80)
+  const vol = Math.round(volume * 100)   // 显示用；真值由 App 的 userVolRef 统一管理
   const [steerText, setSteerText] = useState('')
   const barRef = useRef(null)
   const draggingRef = useRef(false)
@@ -29,8 +29,7 @@ export default function NowPlaying({ track, isPlaying, loadingTrack, audioRef, o
   }, [audioRef])
 
   function changeVolume(v) {
-    setVol(v)
-    if (audioRef?.current) audioRef.current.volume = v / 100
+    onVolume?.(v / 100)   // 交给 App 统一改音量（userVolRef），DJ 压低不会再覆盖它
   }
 
   const ratioFromEvent = (e) => {

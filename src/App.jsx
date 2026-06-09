@@ -10,6 +10,7 @@ import { searchTracks, getSongUrl, getLyric, searchPlaylists, getPlaylistTracks,
 import { analyzeMood, generateStory, curateTracks, interpretRequest, configureLLM, hasLLMKey, analyzeTaste, generatePersona, configurePersona, getPersona } from './services/claudeDJ'
 import { localStory, localMoodConfig } from './services/djText'
 import { greeting, localPersona, vibeReaction } from './services/djPersona'
+import { effectiveVolume, clampVol } from './services/audioVolume'
 import { freshen, pushRecent, removeAt, moveToFront, pushHistory } from './services/radio'
 import QueuePanel from './components/QueuePanel'
 import { keyToAction } from './services/shortcuts'
@@ -65,6 +66,22 @@ export default function App() {
   const saveMemory = useCallback(() => { window.electronAPI.storeMemory(memoryRef.current) }, [])
   const lastSpokeRef = useRef(0)         // 上次语音播报时间（节流，文字每首都显示）
   const [djSpeak, setDjSpeak] = useState(false)   // 本次播报是否出声
+
+  // 音量唯一真源：用户音量(userVolRef) × DJ 说话压低(duckRef)。改音量随时生效、
+  // 不会被"快照-恢复"覆盖（修复：调过音量过一会儿被拉回默认的 bug）。
+  const userVolRef = useRef(0.8)
+  const duckRef = useRef(false)
+  const [volume, setVolume] = useState(0.8)   // 仅供滑块显示
+  const applyVolume = useCallback(() => {
+    const a = audioRef.current
+    if (a) a.volume = effectiveVolume(userVolRef.current, duckRef.current)
+  }, [])
+  const setUserVolume = useCallback((v) => {
+    userVolRef.current = clampVol(v)
+    setVolume(userVolRef.current)
+    applyVolume()
+  }, [applyVolume])
+  const duckForSpeech = useCallback((on) => { duckRef.current = !!on; applyVolume() }, [applyVolume])
 
   // 懒初始化 Web Audio 分析器（只能对一个 <audio> 创建一次 source）
   const ensureAnalyser = useCallback(() => {
@@ -189,8 +206,8 @@ export default function App() {
       if (a === 'playpause') { if (audio?.src) { e.preventDefault(); audio.paused ? audio.play() : audio.pause() } }
       else if (a === 'next') { e.preventDefault(); playNext() }
       else if (a === 'seekback') { if (audio) audio.currentTime = Math.max(0, audio.currentTime - 5) }
-      else if (a === 'volup') { e.preventDefault(); if (audio) audio.volume = Math.min(1, audio.volume + 0.1) }
-      else if (a === 'voldown') { e.preventDefault(); if (audio) audio.volume = Math.max(0, audio.volume - 0.1) }
+      else if (a === 'volup') { e.preventDefault(); setUserVolume(userVolRef.current + 0.1) }
+      else if (a === 'voldown') { e.preventDefault(); setUserVolume(userVolRef.current - 0.1) }
       else if (a === 'like') likeCurrent()
       else if (a === 'mute') { if (audio) audio.muted = !audio.muted }
     }
@@ -213,7 +230,7 @@ export default function App() {
     if (!next) { sleepEndRef.current = 0; setSleepLeft(''); showToast('已关闭睡眠定时') }
     else {
       sleepEndRef.current = Date.now() + next * 60000
-      sleepBaseVolRef.current = audioRef.current?.volume ?? 1
+      sleepBaseVolRef.current = userVolRef.current   // 以用户音量为基准淡出
       showToast(`😴 ${next} 分钟后淡出停止`)
     }
   }
@@ -223,7 +240,7 @@ export default function App() {
       const remaining = sleepEndRef.current - Date.now()
       const audio = audioRef.current
       if (remaining <= 0) {
-        if (audio) { audio.pause(); audio.volume = sleepBaseVolRef.current }
+        if (audio) { audio.pause(); applyVolume() }   // 恢复到用户音量，下次播放正常
         clearInterval(id); setSleepMin(0); setSleepLeft(''); showToast('😴 睡眠定时到，已暂停')
         return
       }
@@ -287,7 +304,7 @@ export default function App() {
   // Set up audio element events
   useEffect(() => {
     const audio = audioRef.current
-    audio.volume = 0.8
+    applyVolume()   // 初始按用户音量(默认0.8)；不再硬设，避免覆盖用户值
 
     // playNext 自带 isAdvancingRef 重入保护
     const onEnded = () => playNext()
@@ -801,10 +818,12 @@ export default function App() {
           onSteer={steerRadio}
           onLike={likeCurrent}
           onOpenQueue={() => setShowQueue(true)}
+          volume={volume}
+          onVolume={setUserVolume}
         />
       </div>
 
-      <DJAnnouncement text={announcement} visible={showAnnouncement} speak={djSpeak} audioRef={audioRef} />
+      <DJAnnouncement text={announcement} visible={showAnnouncement} speak={djSpeak} onDuck={duckForSpeech} />
 
       <div style={{ ...styles.toast, opacity: toast ? 1 : 0, transform: toast ? 'translate(-50%,0)' : 'translate(-50%,8px)' }}>{toast}</div>
 
