@@ -22,8 +22,8 @@
 ## B 队列（好做，轻验证）
 
 - [x] **全局键盘快捷键**：空格=播放/暂停、→=下一首、←=快退5s、↑↓=音量、L=喜欢、M=静音。`keyToAction` 纯映射 + 测试；App 挂 keydown。(9d97f12)
-- [ ] **播放历史**：把 `recentMids` 升级为带时间戳的历史 `[{mid,name,artists,at}]`，持久化；一个"最近播放"小视图，可点回听 / 再 ❤️。抽"压栈去重封顶"纯函数 + 测试（已有 `pushRecent` 可借鉴）。
-- [ ] **进度条拖动 seek**：NowPlaying 进度条支持点击/拖动跳转（`currentTime = ratio*duration`）。抽 ratio↔time 纯函数 + 测试。早上眼检：拖动手感。
+- [x] **播放历史**：队列面板加「最近」标签，记 memory.history(新→旧/去重/封顶100)，点歌重听 + 相对时间。pushHistory 纯函数+测试。(db6004f) ｜ 再 ❤️ 暂未加，留作小增量。
+- [x] **进度条拖动 seek**：已存在！NowPlaying 的 `seekToRatio`/`onBarDown`/`ratioFromEvent` 已是完整拖动+knob。无需重做。
 
 ## C 队列（锦上添花 / 偏手感，默认保守）
 
