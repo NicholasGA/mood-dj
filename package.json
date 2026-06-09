@@ -31,6 +31,7 @@
       "electron.js",
       "preload.js",
       "qqSign.cjs",
+      "build/icon.png",
       "dist/**/*"
     ],
     "win": {

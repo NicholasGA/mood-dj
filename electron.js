@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, net, protocol, screen, shell } = require('electron')
+const { app, BrowserWindow, ipcMain, net, protocol, screen, shell, Tray, Menu, nativeImage, powerMonitor, Notification } = require('electron')
 const path = require('path')
 const fs = require('fs')
 const { autoUpdater } = require('electron-updater')
@@ -32,6 +32,18 @@ const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css
 
 const isDev = process.env.ELECTRON_DEV === 'true'
 let mainWindow
+let tray = null
+let isQuitting = false   // 只有从托盘「退出」或系统退出时才真退；点 ✕ 只收进托盘
+let hintedTray = false   // 首次收进托盘时给一次提示，之后不再打扰
+
+// 单实例锁：再次启动只把已有窗口唤到前台，避免开出第二个实例（曾踩过双开坑）
+if (!app.requestSingleInstanceLock()) {
+  app.quit()
+} else {
+  app.on('second-instance', () => {
+    if (mainWindow) { mainWindow.show(); if (mainWindow.isMinimized()) mainWindow.restore(); mainWindow.focus() }
+  })
+}
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -58,7 +70,48 @@ function createWindow() {
   mainWindow.webContents.on('did-fail-load', (_e, code, desc, url) => dlog('[did-fail-load]', code, desc, url))
   mainWindow.webContents.on('render-process-gone', (_e, d) => dlog('[render-gone]', JSON.stringify(d)))
   mainWindow.webContents.on('console-message', (_e, level, message, lineNo, src) => { if (level >= 2 && !String(message).includes('Security Warning')) dlog('[renderer]', String(message).slice(0, 400), '@', String(src).split('/').pop() + ':' + lineNo) })
+
+  // 点 ✕ / 关闭：不退出，收进托盘继续后台放歌（后台存在感）。真退出走托盘菜单的「退出」。
+  mainWindow.on('close', (e) => {
+    if (isQuitting) return
+    e.preventDefault(); mainWindow.hide()
+    if (!hintedTray) {   // 首次收起给一次系统通知，避免用户以为退出了
+      hintedTray = true
+      try { new Notification({ title: 'Mood DJ 收进托盘了', body: '还在后台放着 · 点托盘图标唤回 · 右键可退出' }).show() } catch {}
+    }
+  })
 }
+
+// ── 系统托盘：后台存在感（窗口收起仍在放，托盘可控+可唤回）──────────────
+function setupTray() {
+  if (tray) return
+  let img = nativeImage.createFromPath(path.join(__dirname, 'build', 'icon.png'))
+  if (!img.isEmpty()) img = img.resize({ width: 16, height: 16 })
+  tray = new Tray(img.isEmpty() ? nativeImage.createEmpty() : img)
+  tray.setToolTip('Mood DJ')
+  const showWin = () => { if (mainWindow) { mainWindow.show(); if (mainWindow.isMinimized()) mainWindow.restore(); mainWindow.focus() } }
+  const sendTray = (action) => { try { mainWindow?.webContents.send('tray-control', action) } catch {} }
+  const menu = Menu.buildFromTemplate([
+    { label: '显示 Mood DJ', click: showWin },
+    { type: 'separator' },
+    { label: '播放 / 暂停', click: () => sendTray('playpause') },
+    { label: '下一首', click: () => sendTray('next') },
+    { type: 'separator' },
+    { label: '退出', click: () => { isQuitting = true; app.quit() } },
+  ])
+  tray.setContextMenu(menu)
+  tray.on('click', showWin)       // 左键单击唤回窗口
+}
+
+// 渲染进程回传当前播放 → 更新托盘 tooltip（隐藏时也知道在放什么）
+ipcMain.on('tray-nowplaying', (_e, info) => {
+  if (!tray) return
+  const txt = info?.name ? `Mood DJ · ${info.name}${info.artist ? ' - ' + info.artist : ''}` : 'Mood DJ'
+  tray.setToolTip(txt.slice(0, 127))
+})
+
+// 系统挂起（合盖/睡眠）→ 让渲染进程暂停，避免唤醒后音频卡死
+powerMonitor.on('suspend', () => { try { mainWindow?.webContents.send('tray-control', 'pause') } catch {} })
 
 // ── qq-audio:// protocol — proxies CDN requests with session cookies ─
 app.whenReady().then(() => {
@@ -104,6 +157,7 @@ app.whenReady().then(() => {
     }
   })
   createWindow()
+  setupTray()
   setupAutoUpdate()
 })
 

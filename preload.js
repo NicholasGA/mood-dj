@@ -19,6 +19,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   openExternal:        (url) => ipcRenderer.invoke('open-external', url),
   onUpdateStatus:      (cb) => ipcRenderer.on('update-status', (_e, data) => cb(data)),
   installUpdate:       () => ipcRenderer.invoke('install-update'),
+  // 托盘/后台存在感：托盘菜单与系统挂起会通过 tray-control 发指令；渲染进程把当前播放回传给托盘做 tooltip
+  onTrayControl:       (cb) => ipcRenderer.on('tray-control', (_e, action) => cb(action)),
+  notifyNowPlaying:    (info) => ipcRenderer.send('tray-nowplaying', info),
   // Window
   minimize: () => ipcRenderer.send('win-minimize'),
   maximize: () => ipcRenderer.send('win-maximize'),

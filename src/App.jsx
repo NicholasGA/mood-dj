@@ -175,6 +175,11 @@ export default function App() {
     setTimeout(() => setShowAnnouncement(false), 5200)
   }, [qqCookies, llmReady])
 
+  // 当前播放回传托盘 → 隐藏到后台时 tooltip 也显示在放什么
+  useEffect(() => {
+    window.electronAPI.notifyNowPlaying?.(currentTrack ? { name: currentTrack.name, artist: currentTrack.artists?.map(a => a.name).join('/') || '' } : null)
+  }, [currentTrack])
+
   // 全局键盘快捷键：空格 播放/暂停、→ 下一首、← 快退5s、↑↓ 音量、L 喜欢、M 静音（输入框内不拦截）
   useEffect(() => {
     const onKey = (e) => {
@@ -190,6 +195,14 @@ export default function App() {
       else if (a === 'mute') { if (audio) audio.muted = !audio.muted }
     }
     window.addEventListener('keydown', onKey)
+    // 托盘菜单 / 系统挂起发来的指令（和键盘共用 playNext/audio 闭包，同样靠事件触发时读取，规避 TDZ）
+    const onTray = (action) => {
+      const audio = audioRef.current
+      if (action === 'playpause') { if (audio?.src) audio.paused ? audio.play() : audio.pause() }
+      else if (action === 'next') playNext()
+      else if (action === 'pause') audio?.pause?.()
+    }
+    window.electronAPI.onTrayControl?.(onTray)
     return () => window.removeEventListener('keydown', onKey)
   }, [])   // 不放 playNext 进依赖：它是后面定义的 const，会触发 TDZ；闭包在事件触发时读取即可
 
