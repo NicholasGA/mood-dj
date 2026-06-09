@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import Onboarding from './components/Onboarding'
 import MoodInput from './components/MoodInput'
-import NowPlaying from './components/NowPlaying'
 import Visualizer from './components/Visualizer'
 import DJAnnouncement from './components/DJAnnouncement'
 import MiniPlayer from './components/MiniPlayer'
@@ -797,7 +796,8 @@ export default function App() {
   }
 
   return (
-    <div style={{ '--accent': accent, '--accent2': accent2, '--breath': breath, ...styles.root, borderRadius: maximized ? 0 : 18, border: maximized ? 'none' : '1px solid rgba(255,255,255,0.08)' }}>
+    <div style={{ '--accent': accent, '--accent2': accent2, '--breath': breath, ...styles.shell, padding: maximized ? 0 : 13 }}>
+    <div style={{ ...styles.root, borderRadius: maximized ? 0 : 20, border: maximized ? 'none' : '1px solid rgba(255,255,255,0.10)', boxShadow: maximized ? 'none' : '0 30px 90px -20px rgba(0,0,0,0.7), 0 8px 30px -12px rgba(0,0,0,0.5)' }}>
       {ambientArt && <img src={ambientArt} alt="" aria-hidden style={styles.ambient} key={ambientArt} />}
       {ambientArt && <div style={styles.ambientVeil} aria-hidden />}
       <div style={styles.titleBar}>
@@ -851,21 +851,15 @@ export default function App() {
             onRepick={() => setShowPicker(true)}
           />
         ) : (
-          /* 选心情：未开台，或播放中点了"换心情" */
-          <div style={styles.cardRow}>
-            <MoodInput onStart={(t, e, v) => { setShowPicker(false); startRadio(t, e, v) }} isLoading={isLoading} isActive={!!currentTrack} moodConfig={moodConfig} taste={tasteProfile} />
-            {!currentTrack ? (
-              <NowPlaying
-                track={currentTrack} isPlaying={isPlaying} loadingTrack={loadingTrack} audioRef={audioRef}
-                onNext={playNext} queueCount={queue.length} onTogglePlay={togglePlay} lyric={lyric}
-                accent={accent} volume={volume} onVolume={setUserVolume}
-              />
-            ) : (
-              <div style={styles.repickAside}>
+          /* 选心情：未开台，或播放中点了"换心情"。整屏 bento 心情选择器，居中 */
+          <div style={styles.pickWrap}>
+            {currentTrack && (
+              <div style={styles.repickBar}>
                 <button style={styles.backBtn} onClick={() => setShowPicker(false)}><Icon name="play" size={14} color={accent} filled /> 返回正在播放</button>
-                <p style={styles.repickHint}>选个新心情会换一整台新歌单；只想微调可以直接「返回」用调味/跟 DJ 说。</p>
+                <span style={styles.repickHint}>选个新心情会换一整台新歌单</span>
               </div>
             )}
+            <MoodInput onStart={(t, e, v) => { setShowPicker(false); startRadio(t, e, v) }} isLoading={isLoading} isActive={!!currentTrack} moodConfig={moodConfig} taste={tasteProfile} />
           </div>
         )}
       </div>
@@ -889,13 +883,16 @@ export default function App() {
         />
       )}
     </div>
+    </div>
   )
 }
 
 const styles = {
   // 圆角窗口 + 半透明深色层 + 心情色辉光：壁纸隐约透出(无形感)，又压暗保证可读(氛围感)。
   // position:relative + overflow:hidden 让圆角能裁住里面的氛围背景/可视化。
-  root: { position: 'relative', height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', fontFamily: 'system-ui,sans-serif', color: '#f9fafb', background: 'radial-gradient(130% 90% at 50% -14%, color-mix(in srgb, var(--accent) 26%, transparent) 0%, transparent 54%), radial-gradient(120% 70% at 50% 116%, color-mix(in srgb, var(--accent2) 16%, transparent) 0%, transparent 50%), linear-gradient(180deg, rgba(10,10,15,0.46) 0%, rgba(6,6,10,0.74) 100%)' },
+  // shell = 整个透明窗口，留内边距让里面的卡片浮起来（带投影）；最大化时 padding 归 0
+  shell: { height: '100vh', boxSizing: 'border-box', background: 'transparent' },
+  root: { position: 'relative', height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden', fontFamily: 'system-ui,sans-serif', color: '#f9fafb', background: 'radial-gradient(130% 90% at 50% -14%, color-mix(in srgb, var(--accent) 26%, transparent) 0%, transparent 54%), radial-gradient(120% 70% at 50% 116%, color-mix(in srgb, var(--accent2) 16%, transparent) 0%, transparent 50%), linear-gradient(180deg, rgba(10,10,15,0.46) 0%, rgba(6,6,10,0.74) 100%)' },
   // 专辑封面氛围背景：缓慢漂移呼吸，跟着音乐"活着"（absolute 以便被根节点圆角裁住）
   ambient: { position: 'absolute', inset: '-12%', width: '124%', height: '124%', objectFit: 'cover', filter: 'blur(52px) saturate(1.8) brightness(0.9)', opacity: 0.82, zIndex: 0, pointerEvents: 'none', animation: 'ambientIn 1.2s ease, drift var(--breath,7s) ease-in-out infinite' },
   ambientVeil: { position: 'absolute', inset: 0, zIndex: 0, pointerEvents: 'none', background: 'radial-gradient(ellipse at 50% 42%, rgba(9,9,12,0.02) 0%, rgba(9,9,12,0.40) 58%, rgba(7,7,11,0.84) 100%)' },
@@ -909,9 +906,10 @@ const styles = {
   errBanner: { position: 'fixed', top: 44, left: '50%', transform: 'translateX(-50%)', background: 'rgba(60,16,16,0.92)', border: '1px solid rgba(239,68,68,0.3)', color: '#fca5a5', fontSize: 13, padding: '8px 20px', borderRadius: 8, zIndex: 200, cursor: 'pointer', whiteSpace: 'nowrap' },
   content: { flex: 1, display: 'flex', flexDirection: 'column', gap: 16, padding: 24, position: 'relative', zIndex: 10, overflowY: 'auto' },
   cardRow: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, alignItems: 'start' },
-  repickAside: { display: 'flex', flexDirection: 'column', gap: 12, alignItems: 'flex-start', justifyContent: 'center', padding: 24 },
-  backBtn: { display: 'inline-flex', alignItems: 'center', gap: 6, padding: '10px 16px', borderRadius: 12, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.14)', color: '#f3f4f6', fontSize: 13.5, fontWeight: 600, cursor: 'pointer' },
-  repickHint: { fontSize: 12.5, color: '#9ca3af', lineHeight: 1.6, margin: 0, maxWidth: 240 },
+  pickWrap: { width: '100%', maxWidth: 600, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 12 },
+  repickBar: { display: 'flex', alignItems: 'center', gap: 12 },
+  backBtn: { display: 'inline-flex', alignItems: 'center', gap: 6, padding: '9px 15px', borderRadius: 12, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.14)', color: '#f3f4f6', fontSize: 13.5, fontWeight: 600, cursor: 'pointer', flexShrink: 0 },
+  repickHint: { fontSize: 12.5, color: '#9ca3af', lineHeight: 1.5, margin: 0 },
   toast: { position: 'fixed', bottom: 96, left: '50%', transform: 'translate(-50%,8px)', background: 'rgba(12,12,16,0.94)', border: '1px solid rgba(255,255,255,0.12)', color: '#f9fafb', fontSize: 13, padding: '8px 18px', borderRadius: 20, zIndex: 300, pointerEvents: 'none', transition: 'opacity .25s, transform .25s' },
   updateBanner: { position: 'fixed', top: 48, left: '50%', transform: 'translateX(-50%)', background: 'rgba(12,12,16,0.95)', border: '1px solid', color: '#f9fafb', fontSize: 13, padding: '8px 16px', borderRadius: 10, zIndex: 250, display: 'flex', alignItems: 'center', gap: 10, whiteSpace: 'nowrap' },
   updateBtn: { padding: '5px 12px', borderRadius: 8, border: 'none', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer' },
