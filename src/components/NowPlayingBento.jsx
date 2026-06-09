@@ -61,6 +61,7 @@ export default function NowPlayingBento({
   const [dragRatio, setDragRatio] = useState(null)  // 拖动时的比例（覆盖显示）
   const [barHover, setBarHover] = useState(false)   // 鼠标悬停进度条 → 展开高亮，明确"已移到可拖区"
   const [hoverRow, setHoverRow] = useState(null)    // 待播列表悬停的行 → 高亮 + 序号变播放键，点一下直切
+  const [moodHover, setMoodHover] = useState(false) // 悬停心情名 → 高亮，提示可点换心情
   const [steerText, setSteerText] = useState('')
   const barRef = useRef(null)
 
@@ -182,10 +183,15 @@ export default function NowPlayingBento({
             <div style={{ ...vivid(accent, accent2, 28), ...s.tile, ...clip }}>
               <LiquidLayer accent={accent} seed={`${seed}-m`} opacity={0.42} />
               <div style={s.tLabel}>心情</div>
-              <div style={s.moodMain} onClick={onRepick} title="点这里换个心情" role="button">
+              <div
+                style={{ ...s.moodMain, ...(moodHover ? { background: 'rgba(255,255,255,0.13)' } : null) }}
+                onClick={onRepick} title="点这里换个心情" role="button"
+                onMouseEnter={() => setMoodHover(true)}
+                onMouseLeave={() => setMoodHover(false)}
+              >
                 <span style={s.moodEmojiWrap}><span style={s.moodEmoji}>{emoji}</span></span>
                 <span style={s.moodName}>{mood}</span>
-                <span style={s.moodEdit} title="换心情"><Icon name="refresh" size={13} color="rgba(255,255,255,0.7)" /></span>
+                <span style={{ ...s.moodEdit, opacity: moodHover ? 1 : 0.55, transform: moodHover ? 'rotate(-45deg)' : 'none' }} title="换心情"><Icon name="refresh" size={13} color="#fff" /></span>
               </div>
               <div style={s.gauges}>
                 <MoodGauge label="能量" v={energy} accent={accent} onCommit={(val) => onSetVibe?.(val, valence)} />
@@ -277,9 +283,11 @@ export default function NowPlayingBento({
 function MoodGauge({ label, v, accent, onCommit }) {
   const trackRef = useRef(null)
   const [drag, setDrag] = useState(null)   // 拖动时的实时比例（覆盖显示），松手后落定再清空
+  const [hover, setHover] = useState(false)
   const cur = drag != null ? drag : (v || 0)
   const pct = Math.max(0, Math.min(100, Math.round(cur * 100)))
-  const active = drag != null
+  const dragging = drag != null
+  const emph = (hover || dragging) && !!onCommit   // 悬停或拖动 → 放大圆点/加粗轨道，提示可拖
   const ratioFromEvent = (e) => {
     const r = trackRef.current.getBoundingClientRect()
     return Math.min(1, Math.max(0, (e.clientX - r.left) / r.width))
@@ -300,13 +308,19 @@ function MoodGauge({ label, v, accent, onCommit }) {
   return (
     <div style={s.gRow}>
       <span style={s.gLabel}>{label}</span>
-      <div ref={trackRef} style={{ ...s.gTrack, ...(onCommit ? { cursor: 'pointer', touchAction: 'none' } : null) }} onPointerDown={onDown}>
-        <div style={{ ...s.gFill, width: `${pct}%`, transition: active ? 'none' : s.gFill.transition,
+      <div
+        ref={trackRef}
+        style={{ ...s.gTrack, ...(onCommit ? { cursor: 'pointer', touchAction: 'none' } : null), ...(emph ? { height: 10, border: `1px solid color-mix(in srgb, ${accent} 35%, rgba(255,255,255,0.12))` } : null) }}
+        onPointerDown={onDown}
+        onPointerEnter={() => setHover(true)}
+        onPointerLeave={() => setHover(false)}
+      >
+        <div style={{ ...s.gFill, width: `${pct}%`, transition: dragging ? 'none' : s.gFill.transition,
           background: `linear-gradient(90deg, color-mix(in srgb, ${accent} 50%, #ffffff), #ffffff)`,
-          boxShadow: `0 0 10px color-mix(in srgb, ${accent} 55%, rgba(255,255,255,0.55))` }} />
-        <div style={{ ...s.gDot, left: `${pct}%`, transition: active ? 'none' : s.gDot.transition,
-          ...(active ? { width: 14, height: 14 } : null),
-          boxShadow: `0 0 8px color-mix(in srgb, ${accent} 70%, #ffffff), 0 1px 3px rgba(0,0,0,0.6)${active ? `, 0 0 0 4px color-mix(in srgb, ${accent} 26%, transparent)` : ''}` }} />
+          boxShadow: `0 0 ${emph ? 14 : 10}px color-mix(in srgb, ${accent} 55%, rgba(255,255,255,0.55))` }} />
+        <div style={{ ...s.gDot, left: `${pct}%`, transition: dragging ? 'none' : s.gDot.transition,
+          ...(emph ? { width: 14, height: 14 } : null),
+          boxShadow: `0 0 8px color-mix(in srgb, ${accent} 70%, #ffffff), 0 1px 3px rgba(0,0,0,0.6)${emph ? `, 0 0 0 4px color-mix(in srgb, ${accent} 26%, transparent)` : ''}` }} />
       </div>
       <span className="led" style={s.gVal}>{pct}</span>
     </div>
@@ -349,17 +363,17 @@ const s = {
   tLed: { fontSize: 26, color: '#fff' },
   tUnit: { fontSize: 12, color: 'rgba(255,255,255,0.78)' },
 
-  moodMain: { display: 'flex', alignItems: 'center', gap: 10, marginTop: 3, cursor: 'pointer', padding: '3px 6px', margin: '3px -6px 0', borderRadius: 12 },
-  moodEdit: { marginLeft: 'auto', flexShrink: 0, display: 'flex', alignItems: 'center', opacity: 0.7 },
+  moodMain: { display: 'flex', alignItems: 'center', gap: 10, marginTop: 3, cursor: 'pointer', padding: '3px 6px', margin: '3px -6px 0', borderRadius: 12, transition: 'background .15s ease' },
+  moodEdit: { marginLeft: 'auto', flexShrink: 0, display: 'flex', alignItems: 'center', transition: 'opacity .15s ease, transform .25s ease' },
   moodEmojiWrap: { width: 38, height: 38, borderRadius: 11, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(255,255,255,0.13)', border: '1px solid rgba(255,255,255,0.2)', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.18), 0 2px 8px rgba(0,0,0,0.25)' },
   moodEmoji: { fontSize: 21, lineHeight: 1 },
   moodName: { fontSize: 17, fontWeight: 800, color: '#fff', textShadow: '0 1px 6px rgba(0,0,0,0.4)', lineHeight: 1.2, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', minWidth: 0 },
   gauges: { marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: 10 },
   gRow: { display: 'flex', alignItems: 'center', gap: 9 },
   gLabel: { fontSize: 11, color: 'rgba(255,255,255,0.85)', width: 28, flexShrink: 0 },
-  gTrack: { position: 'relative', flex: 1, height: 8, borderRadius: 5, background: 'rgba(0,0,0,0.34)', boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.5)', border: '1px solid rgba(255,255,255,0.08)' },
-  gFill: { position: 'absolute', top: 0, left: 0, height: '100%', borderRadius: 5, transition: 'width .4s cubic-bezier(.22,.61,.36,1)' },
-  gDot: { position: 'absolute', top: '50%', width: 11, height: 11, borderRadius: '50%', transform: 'translate(-50%,-50%)', background: '#fff', transition: 'left .4s cubic-bezier(.22,.61,.36,1)' },
+  gTrack: { position: 'relative', flex: 1, height: 8, borderRadius: 5, background: 'rgba(0,0,0,0.34)', boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.5)', border: '1px solid rgba(255,255,255,0.08)', transition: 'height .16s ease, border-color .16s ease' },
+  gFill: { position: 'absolute', top: 0, left: 0, height: '100%', borderRadius: 5, transition: 'width .4s cubic-bezier(.22,.61,.36,1), box-shadow .16s ease' },
+  gDot: { position: 'absolute', top: '50%', width: 11, height: 11, borderRadius: '50%', transform: 'translate(-50%,-50%)', background: '#fff', transition: 'left .4s cubic-bezier(.22,.61,.36,1), width .16s ease, height .16s ease, box-shadow .16s ease' },
   gVal: { fontSize: 14, color: '#fff', width: 26, textAlign: 'right', flexShrink: 0 },
 
   ph2: { background: 'rgba(255,255,255,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 },
