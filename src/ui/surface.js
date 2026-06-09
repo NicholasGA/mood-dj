@@ -59,30 +59,32 @@ export function albumPalette(accent = '#7c3aed') {
 
 // 鲜艳渐变玻璃方块（参考霓虹 bento 风格）：一个色相的发光渐变 + 大圆角 + 同色辉光 + 顶部高光。
 // 透明窗口下没法真模糊，所以用"饱和渐变 + 辉光 + 半透明"还原玻璃质感。
-export function vivid(c1, c2 = c1, radius = 22) {
+// 鲜艳渐变方块（参考霓虹 bento）：单一色相的柔渐变(更亮的左上 → 自然压暗的右下边缘) + 大圆角 +
+// 柔和顶部光 + 更大更散的同色柔光晕。比双色硬渐变更"高级"、更接近参考的玻璃质感（不吃 GPU 的那部分）。
+export function vivid(c1, c2 = c1, radius = 28) {
   return {
     background: [
-      'radial-gradient(78% 52% at 50% -10%, rgba(255,255,255,0.24), rgba(255,255,255,0) 62%)',   // 顶部玻璃反光
-      `radial-gradient(135% 135% at 26% 16%, ${c1} 0%, ${c2} 58%, color-mix(in srgb, ${c2} 60%, #0a0a0f) 100%)`,
+      'radial-gradient(120% 80% at 30% -8%, rgba(255,255,255,0.16), rgba(255,255,255,0) 55%)',   // 柔和顶部光（不再硬反光）
+      `radial-gradient(150% 135% at 24% 12%, ${c1} 0%, color-mix(in srgb, ${c1} 60%, #0a0a12) 62%, color-mix(in srgb, ${c1} 20%, #07070d) 100%)`,  // 单色柔渐变，边缘自然压暗
     ].join(', '),
     borderRadius: radius,
-    border: '1px solid rgba(255,255,255,0.08)',   // 降低整圈描边的"贴纸感"，质感靠下面的方向性内阴影
+    border: '1px solid rgba(255,255,255,0.10)',
     boxShadow: [
-      'inset 0 1px 0 rgba(255,255,255,0.30)',                                   // 顶部高光：玻璃吃光（亮）
-      'inset 0 -20px 36px -22px rgba(0,0,0,0.55)',                              // 底部内阴影：弧面厚度（暗）
-      `0 16px 38px -16px color-mix(in srgb, ${c1} 55%, transparent)`,           // 远处同色柔阴影
-      `0 0 24px -6px color-mix(in srgb, ${c1} 42%, transparent)`,               // 同色辉光
+      'inset 0 1px 0 rgba(255,255,255,0.22)',                                   // 柔顶部高光
+      'inset 0 -44px 64px -40px rgba(0,0,0,0.42)',                              // 更柔更深的底部弧面
+      `0 28px 64px -26px color-mix(in srgb, ${c1} 44%, transparent)`,           // 柔投影（更大更散）
+      `0 0 64px -18px color-mix(in srgb, ${c1} 32%, transparent)`,              // 柔光晕（大而散，像参考的 bloom）
     ].join(', '),
   }
 }
 
 // 暗块（接下来/DJ 故事这类文字多的块）：深色 + 一丝色相染色，不发光，用来托住亮块、建立两亮两暗的层级
-export function vividDark(tint, radius = 20) {
+export function vividDark(tint, radius = 28) {
   return {
-    background: `radial-gradient(125% 105% at 28% 0%, color-mix(in srgb, ${tint} 30%, #0c0f17) 0%, #0a0c12 82%)`,
+    background: `radial-gradient(125% 100% at 28% 0%, color-mix(in srgb, ${tint} 26%, #0d1017) 0%, #0a0c12 80%)`,
     borderRadius: radius,
     border: '1px solid rgba(255,255,255,0.07)',
-    boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.11), inset 0 -18px 34px -24px rgba(0,0,0,0.5), 0 14px 30px -18px rgba(0,0,0,0.6)',
+    boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.10), inset 0 -34px 54px -38px rgba(0,0,0,0.45), 0 22px 50px -24px rgba(0,0,0,0.55)',
   }
 }
 
