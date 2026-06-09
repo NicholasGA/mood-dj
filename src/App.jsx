@@ -796,8 +796,8 @@ export default function App() {
   }
 
   return (
-    <div style={{ '--accent': accent, '--accent2': accent2, '--breath': breath, ...styles.shell, padding: maximized ? 0 : 13 }}>
-    <div style={{ ...styles.root, borderRadius: maximized ? 0 : 20, border: maximized ? 'none' : '1px solid rgba(255,255,255,0.10)', boxShadow: maximized ? 'none' : '0 30px 90px -20px rgba(0,0,0,0.7), 0 8px 30px -12px rgba(0,0,0,0.5)' }}>
+    <div style={{ '--accent': accent, '--accent2': accent2, '--breath': breath, ...styles.shell, padding: maximized ? 0 : 22 }}>
+    <div style={{ ...styles.root, borderRadius: maximized ? 0 : 20, border: maximized ? 'none' : '1px solid rgba(255,255,255,0.05)', boxShadow: maximized ? 'none' : 'inset 0 1px 0 rgba(255,255,255,0.13), 0 7px 24px -10px rgba(0,0,0,0.5)' }}>
       {ambientArt && <img src={ambientArt} alt="" aria-hidden style={styles.ambient} key={ambientArt} />}
       {ambientArt && <div style={styles.ambientVeil} aria-hidden />}
       <div style={styles.titleBar}>
