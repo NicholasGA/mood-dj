@@ -492,6 +492,19 @@ ipcMain.on('win-minimize', () => mainWindow.minimize())
 ipcMain.on('win-maximize', () => mainWindow.isMaximized() ? mainWindow.unmaximize() : mainWindow.maximize())
 ipcMain.on('win-close',    () => mainWindow.close())
 
+// 透明窗 Windows 坑：从小尺寸(迷你/壁龛)放大还原后，新增区域常不重绘 → 整窗透明=隐形。
+// show() 对已显示窗口不强制重绘，故还原后 invalidate + 抖 1px 逼 Windows 整窗重画。
+function showAndRepaint() {
+  if (!mainWindow || mainWindow.isDestroyed()) return
+  // 透明窗从小尺寸放大后，Chromium 不会重建合成面 → 放大区域全透明=隐形。
+  // 最小化再还原能逼 Windows 整窗重新合成（比 setBounds 抖尺寸 / hide-show 都可靠）。
+  mainWindow.show()
+  mainWindow.minimize()
+  mainWindow.restore()
+  mainWindow.focus()
+  try { mainWindow.webContents.invalidate() } catch {}
+}
+
 // ── 迷你播放器：把主窗口切成置顶小窗 / 还原 ───────────────────────
 let prevBounds = null
 ipcMain.handle('set-mini', (_e, on) => {
@@ -517,7 +530,7 @@ ipcMain.handle('set-mini', (_e, on) => {
       mainWindow.setMinimumSize(960, 660)
       if (prevBounds) mainWindow.setBounds(prevBounds)
       else mainWindow.setSize(1280, 820)
-      mainWindow.show(); mainWindow.focus()
+      showAndRepaint()
       dlog('[mini] OFF →', JSON.stringify(mainWindow.getBounds()))
     }
   } catch (e) { dlog('[mini] error', e.message) }
@@ -554,7 +567,7 @@ ipcMain.handle('set-dock', (_e, on) => {
       mainWindow.setResizable(true)
       if (dockPrevBounds) mainWindow.setBounds(dockPrevBounds)
       else mainWindow.setSize(1280, 820)
-      mainWindow.show(); mainWindow.focus()
+      showAndRepaint()
       dlog('[dock] OFF')
     }
   } catch (e) { dlog('[dock] error', e.message) }
