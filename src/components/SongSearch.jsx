@@ -111,10 +111,11 @@ export default function SongSearch({ accent = '#31c27c', playlists = [], onSearc
 
           {/* 我的收藏：某歌单里的歌 */}
           {inPlaylist && (<>
-            {loading && <div style={s.hint}>读取「{sel.name}」…</div>}
+            {loading && <div style={s.hint}>读取「{sel.name}」全部歌曲…</div>}
             {!loading && plTracks.length > 0 && trackList.length === 0 && <div style={s.hint}>这个歌单里没有「{q.trim()}」</div>}
             {!loading && plTracks.length === 0 && <div style={s.hint}>这个歌单没取到歌</div>}
-            {trackList.map((t, i) => <TrackRow key={`${t.mid}-${i}`} t={t} accent={accent} onPlay={onPlay} onQueue={onQueue} />)}
+            {trackList.slice(0, 300).map((t, i) => <TrackRow key={`${t.mid}-${i}`} t={t} accent={accent} onPlay={onPlay} onQueue={onQueue} />)}
+            {!loading && trackList.length > 300 && <div style={s.hint}>共 {trackList.length} 首，已显示前 300 —— 输入关键词可搜全部</div>}
           </>)}
         </div>
       </div>
