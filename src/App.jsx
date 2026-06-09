@@ -1023,7 +1023,7 @@ export default function App() {
           accent={accent}
           playlists={favPlaylists}
           onSearch={(query) => searchTracks(qqCookiesRef.current, query, 20)}
-          onLoadPlaylist={loadPlaylist}
+          onLoadPage={loadPlaylistPage}
           onPlay={playSearched}
           onQueue={queueSearched}
           onPlayList={playList}
