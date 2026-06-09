@@ -294,6 +294,7 @@ function MoodGauge({ label, v, accent, onCommit }) {
   const [hover, setHover] = useState(false)
   const [editing, setEditing] = useState(false)  // 点数字 → 直接输入
   const [editVal, setEditVal] = useState('')
+  const [valHover, setValHover] = useState(false) // 悬停数字 → 高亮，提示可点输入
   const cur = drag != null ? drag : (v || 0)
   const pct = Math.max(0, Math.min(100, Math.round(cur * 100)))
   const dragging = drag != null
@@ -349,13 +350,15 @@ function MoodGauge({ label, v, accent, onCommit }) {
             else if (e.key === 'Escape') { cancelRef.current = true; e.target.blur() }
           }}
           onBlur={() => { if (cancelRef.current) { cancelRef.current = false; setEditing(false) } else commitEdit() }}
-          style={{ ...s.gValInput, borderColor: accent }}
+          style={{ ...s.gValInput, borderColor: accent, boxShadow: `0 0 0 3px color-mix(in srgb, ${accent} 24%, transparent), 0 0 12px color-mix(in srgb, ${accent} 40%, transparent)` }}
         />
       ) : (
         <span
           className="led"
-          style={{ ...s.gVal, ...(onCommit ? { cursor: 'text' } : null) }}
+          style={{ ...s.gVal, ...(onCommit ? { cursor: 'text' } : null), ...(valHover ? { background: `color-mix(in srgb, ${accent} 22%, rgba(255,255,255,0.06))`, boxShadow: `0 0 0 1px color-mix(in srgb, ${accent} 38%, transparent)` } : null) }}
           onClick={() => { if (onCommit) { setEditVal(String(pct)); setEditing(true) } }}
+          onMouseEnter={() => onCommit && setValHover(true)}
+          onMouseLeave={() => setValHover(false)}
           title={onCommit ? '点击直接输入数值（0–100）' : undefined}
         >{pct}</span>
       )}
@@ -410,8 +413,8 @@ const s = {
   gTrack: { position: 'relative', flex: 1, height: 8, borderRadius: 5, background: 'rgba(0,0,0,0.34)', boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.5)', border: '1px solid rgba(255,255,255,0.08)', transition: 'height .16s ease, border-color .16s ease' },
   gFill: { position: 'absolute', top: 0, left: 0, height: '100%', borderRadius: 5, transition: 'width .4s cubic-bezier(.22,.61,.36,1), box-shadow .16s ease' },
   gDot: { position: 'absolute', top: '50%', width: 11, height: 11, borderRadius: '50%', transform: 'translate(-50%,-50%)', background: '#fff', transition: 'left .4s cubic-bezier(.22,.61,.36,1), width .16s ease, height .16s ease, box-shadow .16s ease' },
-  gVal: { fontSize: 14, color: '#fff', width: 26, textAlign: 'right', flexShrink: 0 },
-  gValInput: { width: 34, fontSize: 13, fontWeight: 700, color: '#fff', textAlign: 'center', flexShrink: 0, background: 'rgba(0,0,0,0.4)', border: '1px solid', borderRadius: 6, outline: 'none', padding: '2px 0', appearance: 'none' },
+  gVal: { fontSize: 14, color: '#fff', minWidth: 34, textAlign: 'center', flexShrink: 0, padding: '2px 4px', borderRadius: 7, transition: 'background .15s ease, box-shadow .15s ease' },
+  gValInput: { width: 34, fontSize: 13, fontWeight: 700, color: '#fff', textAlign: 'center', flexShrink: 0, background: 'rgba(0,0,0,0.45)', border: '1px solid', borderRadius: 7, outline: 'none', padding: '2px 0', appearance: 'none', transition: 'box-shadow .15s ease' },
 
   ph2: { background: 'rgba(255,255,255,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 },
   upHead: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
