@@ -8,7 +8,7 @@ import NicheDock from './components/NicheDock'
 import NowPlayingBento from './components/NowPlayingBento'
 import Icon from './components/Icon'
 import { searchTracks, getSongUrl, getLyric, searchPlaylists, getPlaylistTracks, searchByArtist } from './services/qqMusicApi'
-import { analyzeMood, generateStory, curateTracks, interpretRequest, configureLLM, hasLLMKey, analyzeTaste, generatePersona, configurePersona, getPersona } from './services/claudeDJ'
+import { analyzeMood, generateStory, curateTracks, interpretRequest, recommendSongs, configureLLM, hasLLMKey, analyzeTaste, generatePersona, configurePersona, getPersona } from './services/claudeDJ'
 import { localStory, localMoodConfig } from './services/djText'
 import { greeting, localPersona, vibeReaction } from './services/djPersona'
 import { effectiveVolume, clampVol } from './services/audioVolume'
@@ -534,6 +534,23 @@ export default function App() {
     return () => audio.removeEventListener('timeupdate', onTime)
   }, [])
 
+  // 把 AI 推荐的具体歌（歌名-歌手）逐一在 QQ 搜出可播曲目，尽量按同名 + 同歌手匹配
+  async function resolveRecommended(recs) {
+    if (!recs?.length) return []
+    const norm = (s) => (s || '').toLowerCase().replace(/[\s（）()【】[\]『』「」・·,，.。!！?？'"-]/g, '')
+    const results = await Promise.allSettled(recs.map(r => searchTracks(qqCookiesRef.current, r.artist ? `${r.name} ${r.artist}` : r.name, 4, 1)))
+    const out = [], seen = new Set()
+    results.forEach((res, i) => {
+      if (res.status !== 'fulfilled' || !res.value?.length) return
+      const want = norm(recs[i].name), wa = norm(recs[i].artist)
+      const nameMatch = (t) => { const tn = norm(t.name); return tn && want && (tn.includes(want) || want.includes(tn)) }
+      const hit = res.value.find(t => nameMatch(t) && (() => { const ta = norm((t.artists || []).map(a => a.name).join('')); return !wa || !ta || ta.includes(wa) || wa.includes(ta) })())
+        || res.value.find(nameMatch) || res.value[0]
+      if (hit?.mid && !seen.has(hit.mid)) { seen.add(hit.mid); out.push(hit) }
+    })
+    return out
+  }
+
   async function startRadio(moodText, energy, valence) {
     setIsLoading(true); setError('')
     let shuffled = null
@@ -568,6 +585,13 @@ export default function App() {
       // 0) 收藏样本 + 喜欢过的歌直接进池（AI 精排会按心情筛）
       if (fav?.sample?.length) add(fav.sample)
       if (memoryRef.current.likedTracks.length) add(memoryRef.current.likedTracks.slice(-30))
+
+      // 0.5) AI 选歌（核心升级）：DJ 像歌单编辑那样推"具体的歌" → QQ 解析成可播，作高优先来源。
+      // 比关键词搜出来的泛泛热门精准；AI 不可用/限流就跳过，靠下面关键词/歌单兜底。
+      try {
+        const recs = await recommendSongs(moodText, { genres: tasteProfile?.genres, artists: taste }, { n: 14 })
+        add(await resolveRecommended(recs))
+      } catch {}
 
       // 1) 单曲搜索（并发，翻较深页：避开第 1 页口水热门，更新鲜）
       ok(await Promise.allSettled(queries.map(q => searchTracks(qqCookiesRef.current, q, 15, 2 + Math.floor(Math.random() * 6)))))
@@ -750,6 +774,9 @@ export default function App() {
         if (favRef.current?.sample?.length) add(favRef.current.sample)
         const myFav = favRef.current?.playlistIds?.[0]
         if (myFav) { try { await getPlaylistTracks(qqCookiesRef.current, myFav, 60, Math.floor(Math.random() * 3) * 60).then(add).catch(() => {}) } catch {} }
+      } else {
+        // AI 选歌（核心）：按这次需求 + 口味推"具体的歌" → QQ 解析（探索时挑冷门）。失败靠下面搜索兜底。
+        try { add(await resolveRecommended(await recommendSongs(t, tasteHint, { n: 12, discover }))) } catch {}
       }
       // 点名歌手 → 搜本人（singer 过滤），翻两页
       for (const ar of intent.artists.slice(0, 3)) {

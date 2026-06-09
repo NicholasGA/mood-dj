@@ -225,6 +225,24 @@ export async function interpretRequest(text, taste = {}) {
   }
 }
 
+// AI 选歌（核心升级）：让 LLM 当资深歌单编辑/乐评人，按需求+心情+口味推荐"具体的歌"。
+// LLM 学过海量乐评/歌单/推荐，相当于把"别人推荐的歌单"内化了——比关键词搜出来的泛泛热门精准。
+// 返回 [{name, artist}]，调用方再去 QQ 把这些歌解析成可播曲目。
+export async function recommendSongs(request, taste = {}, opts = {}) {
+  const n = opts.n || 14
+  const tasteLine = (taste.genres?.length || taste.artists?.length)
+    ? `听众口味：曲风[${(taste.genres || []).slice(0, 5).join('、')}] 常听[${(taste.artists || []).slice(0, 8).join('、')}]。推荐时贴合但不要全是这些歌手本人。\n` : ''
+  const system = withPersona(`你是资深歌单编辑/乐评人，熟悉各国曲风、年代、冷门宝藏。只输出JSON数组，不要任何解释。`)
+  const raw = await gemini(system, `
+需求/心情："${request}"
+${tasteLine}像优质歌单/乐评人那样，推荐 ${n} 首真实存在、契合上面需求与口味的具体歌曲——注重品味与契合度，宁缺毋滥，可跨语种、有层次。${opts.discover ? '重点挑听众多半没听过的冷门宝藏/小众佳作，避开大热口水歌。' : ''}
+只返回JSON数组：[{"name":"准确歌名","artist":"主要歌手"}, …]`, { maxTokens: 800, temperature: 0.9 })
+  const m = raw.match(/\[[\s\S]*\]/)
+  if (!m) throw new Error('recommend failed')
+  const arr = JSON.parse(m[0])
+  return arr.filter(x => x?.name).map(x => ({ name: String(x.name).trim(), artist: String(x.artist || '').trim() })).slice(0, n)
+}
+
 // AI 精排：从候选池里按心情/能量/情绪挑选并排序，剔除不搭的歌；favArtists 偏向用户口味
 export async function curateTracks(tracks, moodConfig, energy, valence, favArtists = []) {
   const pool = tracks.slice(0, 45)
