@@ -6,7 +6,7 @@ import Visualizer from './components/Visualizer'
 import DJAnnouncement from './components/DJAnnouncement'
 import MiniPlayer from './components/MiniPlayer'
 import NicheDock from './components/NicheDock'
-import BentoStats from './components/BentoStats'
+import NowPlayingBento from './components/NowPlayingBento'
 import Icon from './components/Icon'
 import { searchTracks, getSongUrl, getLyric, searchPlaylists, getPlaylistTracks, searchByArtist } from './services/qqMusicApi'
 import { analyzeMood, generateStory, curateTracks, interpretRequest, configureLLM, hasLLMKey, analyzeTaste, generatePersona, configurePersona, getPersona } from './services/claudeDJ'
@@ -39,6 +39,7 @@ export default function App() {
   const [likedCount, setLikedCount] = useState(0)   // 本地喜欢数量（喂口味，不再单独展示面板）
   const [tasteProfile, setTasteProfile] = useState(null)   // AI 音乐画像，无感呈现在主界面
   const [showQueue, setShowQueue] = useState(false)   // 播放队列面板
+  const [showPicker, setShowPicker] = useState(false)   // 播放中点"换心情"→ 回到选心情
   const [sleepMin, setSleepMin] = useState(0)   // 睡眠定时（分钟，0=关）
   const [sleepLeft, setSleepLeft] = useState('')   // 剩余 mm:ss
   const sleepEndRef = useRef(0)
@@ -519,6 +520,7 @@ export default function App() {
         config = localMoodConfig(moodText)   // AI 不可用：按关键词本地兜底，比通用歌单更贴心情
       }
       config.energy = energy  // 供 Visualizer 用（analyzeMood 不回传 energy）
+      config.valence = valence  // 供「心情」bento 块显示情绪值
       setMoodConfig(config)
       setAnnouncement(config.dj_intro)
       setShowAnnouncement(true)
@@ -832,35 +834,35 @@ export default function App() {
       )}
 
       <div style={styles.content}>
-        <div style={styles.cardRow}>
-          <MoodInput onStart={startRadio} isLoading={isLoading} isActive={!!currentTrack} moodConfig={moodConfig} taste={tasteProfile} />
-          <NowPlaying
-            track={currentTrack}
-            isPlaying={isPlaying}
-            loadingTrack={loadingTrack}
-            audioRef={audioRef}
-            onNext={playNext}
-            queueCount={queue.length}
-            onTogglePlay={togglePlay}
-            lyric={lyric}
-            accent={accent}
-            onVibe={adjustVibe}
-            onDislike={dislikeCurrent}
-            onSteer={steerRadio}
-            onLike={likeCurrent}
-            onOpenQueue={() => setShowQueue(true)}
-            volume={volume}
-            onVolume={setUserVolume}
+        {currentTrack && !showPicker ? (
+          /* 听歌时：bento 仪表盘 */
+          <NowPlayingBento
+            track={currentTrack} isPlaying={isPlaying} loadingTrack={loadingTrack} audioRef={audioRef}
+            accent={accent} accent2={accent2}
+            onTogglePlay={togglePlay} onNext={playNext} onLike={likeCurrent} onDislike={dislikeCurrent}
+            onVibe={adjustVibe} onSteer={steerRadio} onOpenQueue={() => setShowQueue(true)}
+            queueCount={queue.length} nextTrack={queue[0]} lyric={lyric} moodConfig={moodConfig}
+            story={memoryRef.current.songStories?.[currentTrack.mid] || localStory(currentTrack)}
+            djName={getPersona()?.name} analyser={analyserRef} volume={volume} onVolume={setUserVolume}
+            onRepick={() => setShowPicker(true)}
           />
-        </div>
-        {currentTrack && (
-          <BentoStats
-            accent={accent}
-            energy={moodConfig?.energy ?? 0.5}
-            queue={queue.length}
-            listened={(memoryRef.current.history || []).length}
-            mood={moodConfig?.mood_name}
-          />
+        ) : (
+          /* 选心情：未开台，或播放中点了"换心情" */
+          <div style={styles.cardRow}>
+            <MoodInput onStart={(t, e, v) => { setShowPicker(false); startRadio(t, e, v) }} isLoading={isLoading} isActive={!!currentTrack} moodConfig={moodConfig} taste={tasteProfile} />
+            {!currentTrack ? (
+              <NowPlaying
+                track={currentTrack} isPlaying={isPlaying} loadingTrack={loadingTrack} audioRef={audioRef}
+                onNext={playNext} queueCount={queue.length} onTogglePlay={togglePlay} lyric={lyric}
+                accent={accent} volume={volume} onVolume={setUserVolume}
+              />
+            ) : (
+              <div style={styles.repickAside}>
+                <button style={styles.backBtn} onClick={() => setShowPicker(false)}><Icon name="play" size={14} color={accent} filled /> 返回正在播放</button>
+                <p style={styles.repickHint}>选个新心情会换一整台新歌单；只想微调可以直接「返回」用调味/跟 DJ 说。</p>
+              </div>
+            )}
+          </div>
         )}
       </div>
 
@@ -903,6 +905,9 @@ const styles = {
   errBanner: { position: 'fixed', top: 44, left: '50%', transform: 'translateX(-50%)', background: 'rgba(60,16,16,0.92)', border: '1px solid rgba(239,68,68,0.3)', color: '#fca5a5', fontSize: 13, padding: '8px 20px', borderRadius: 8, zIndex: 200, cursor: 'pointer', whiteSpace: 'nowrap' },
   content: { flex: 1, display: 'flex', flexDirection: 'column', gap: 16, padding: 24, position: 'relative', zIndex: 10, overflowY: 'auto' },
   cardRow: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, alignItems: 'start' },
+  repickAside: { display: 'flex', flexDirection: 'column', gap: 12, alignItems: 'flex-start', justifyContent: 'center', padding: 24 },
+  backBtn: { display: 'inline-flex', alignItems: 'center', gap: 6, padding: '10px 16px', borderRadius: 12, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.14)', color: '#f3f4f6', fontSize: 13.5, fontWeight: 600, cursor: 'pointer' },
+  repickHint: { fontSize: 12.5, color: '#9ca3af', lineHeight: 1.6, margin: 0, maxWidth: 240 },
   toast: { position: 'fixed', bottom: 96, left: '50%', transform: 'translate(-50%,8px)', background: 'rgba(12,12,16,0.94)', border: '1px solid rgba(255,255,255,0.12)', color: '#f9fafb', fontSize: 13, padding: '8px 18px', borderRadius: 20, zIndex: 300, pointerEvents: 'none', transition: 'opacity .25s, transform .25s' },
   updateBanner: { position: 'fixed', top: 48, left: '50%', transform: 'translateX(-50%)', background: 'rgba(12,12,16,0.95)', border: '1px solid', color: '#f9fafb', fontSize: 13, padding: '8px 16px', borderRadius: 10, zIndex: 250, display: 'flex', alignItems: 'center', gap: 10, whiteSpace: 'nowrap' },
   updateBtn: { padding: '5px 12px', borderRadius: 8, border: 'none', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer' },
