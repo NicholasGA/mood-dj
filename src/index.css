@@ -130,16 +130,23 @@ input:focus, textarea:focus {
   text-shadow: 0 0 14px color-mix(in srgb, currentColor 65%, transparent), 0 0 4px color-mix(in srgb, currentColor 40%, transparent);
 }
 
-/* 换心情浮窗：从心情卡那侧"流"出来摊成面板。
-   只动 transform + opacity（GPU 合成层，丝滑）——不再动 border-radius(圆角全程固定 28，避免每帧重绘+
-   重新裁剪带模糊的液体层)。transformOrigin 由 JS 指到贴着心情卡的角；scaleX 从 .45 拉到 1 = 水往外流的方向感。 */
-@keyframes liquidFlowIn {
-  0%   { opacity: 0; transform: scaleX(.45) scaleY(.9); }
-  55%  { opacity: 1; }
-  100% { opacity: 1; transform: scaleX(1) scaleY(1); }
+/* 换心情浮窗 = 一滴水成形。分两层，把"贵的"模糊内容排除在形变之外，所以又像水又丝滑：
+   1) 水滴层(.mood-blob)：纯 accent 渐变(无模糊/无内容)，从小圆点 morph 成面板形状(圆角 50%→28 + 放大)。
+      渐变改圆角很便宜；放大走 transform(GPU)。transformOrigin 由 JS 指到贴着心情卡的角。
+   2) 内容层(.mood-body)：水纹 + 选项，等水滴基本成形后再 opacity 淡入，全程不缩放/不裁剪模糊层。 */
+@keyframes moodBlobForm {
+  0%   { opacity: 0; transform: scale(.14); border-radius: 50%; }
+  28%  { opacity: 1; }
+  68%  { transform: scale(1.03); border-radius: 38px; }
+  100% { opacity: 1; transform: scale(1); border-radius: 28px; }
 }
-.liquid-flow-in { animation: liquidFlowIn .46s cubic-bezier(.16, 1, .3, 1) both; will-change: transform, opacity; }
-@media (prefers-reduced-motion: reduce) { .liquid-flow-in { animation: none !important; } }
+.mood-blob { animation: moodBlobForm .52s cubic-bezier(.34, 1.2, .4, 1) both; will-change: transform; }
+@keyframes moodBodyIn {
+  0%, 50% { opacity: 0; }
+  100%    { opacity: 1; }
+}
+.mood-body { animation: moodBodyIn .52s ease both; }
+@media (prefers-reduced-motion: reduce) { .mood-blob, .mood-body { animation: none !important; } }
 
 /* 换心情浮窗里的描述输入：在亮 accent 面板上保持深色可读（盖掉全局 input:focus 的白底） */
 .mood-pop-input:focus { background: rgba(0,0,0,0.32) !important; border-color: rgba(255,255,255,0.45) !important; box-shadow: none !important; }
