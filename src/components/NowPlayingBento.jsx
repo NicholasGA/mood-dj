@@ -146,6 +146,12 @@ export default function NowPlayingBento({
               <div style={s.heroCtrl}>
                 <button style={{ ...s.playBtn, boxShadow: `${s.playBtn.boxShadow}, 0 0 calc(var(--pulse,0) * 44px) calc(var(--pulse,0) * 3px) color-mix(in srgb, ${accent} 90%, transparent)` }} onClick={onTogglePlay} title="播放/暂停"><Icon name={isPlaying ? 'pause' : 'play'} size={22} color={accent} filled /></button>
                 <button style={s.nextBtn} onClick={onNext} title="下一首"><Icon name="next" size={17} color="#fff" filled /></button>
+                <button
+                  style={{ ...s.nextBtn, ...(repeatOne ? { background: '#fff', borderColor: '#fff' } : {}) }}
+                  onClick={onToggleRepeat}
+                  title={repeatOne ? '单曲循环已开：放完重头再放本首' : '单曲循环'}>
+                  <Icon name="repeat1" size={16} color={repeatOne ? accent : '#fff'} />
+                </button>
               </div>
             </div>
           </div>
@@ -220,12 +226,6 @@ export default function NowPlayingBento({
         <button style={s.pill} onClick={() => onVibe('up')}><Icon name="flame" size={14} color="#fb923c" /> 嗨</button>
         <button style={s.pill} onClick={() => onVibe('down')}><Icon name="moon" size={14} color="#93c5fd" /> 静</button>
         <button style={s.pill} onClick={() => onVibe('flavor')}><Icon name="shuffle" size={14} color="#c4b5fd" /> 换</button>
-        <button
-          style={{ ...s.pill, ...(repeatOne ? { background: `color-mix(in srgb, ${accent} 78%, transparent)`, borderColor: accent, color: '#fff' } : {}) }}
-          onClick={onToggleRepeat}
-          title={repeatOne ? '单曲循环已开：放完重头再放本首（不续下一首）' : '单曲循环'}>
-          <Icon name="repeat1" size={14} color={repeatOne ? '#fff' : '#c4b5fd'} /> 单曲循环
-        </button>
         <div style={s.steerWrap}>
           <span style={s.steerMic}><Icon name="mic" size={15} color="#9ca3af" /></span>
           <input style={s.steerInput} placeholder="跟 DJ 说…「放点周杰伦但安静的」" value={steerText}
