@@ -174,12 +174,21 @@ function setupAutoUpdate() {
   autoUpdater.autoInstallOnAppQuit = true
   autoUpdater.on('update-available', (i) => { dlog('[update] available', i.version); sendUpdate({ state: 'available', version: i.version }) })
   autoUpdater.on('download-progress', (p) => sendUpdate({ state: 'downloading', percent: Math.round(p.percent) }))
-  autoUpdater.on('update-downloaded', (i) => { dlog('[update] downloaded', i.version); sendUpdate({ state: 'downloaded', version: i.version }) })
+  autoUpdater.on('update-downloaded', (i) => {
+    dlog('[update] downloaded', i.version)
+    sendUpdate({ state: 'downloaded', version: i.version })
+    // 全自动：下载完 → 提示 5 秒 → 自动关掉并静默安装、装完自动启动新版本。
+    // 必须先 isQuitting=true，否则 quitAndInstall 关窗时会被"收进托盘"逻辑拦下、装不了。
+    setTimeout(() => {
+      isQuitting = true
+      try { autoUpdater.quitAndInstall(true, true) } catch (e) { dlog('[update] quitAndInstall failed', e.message) }
+    }, 5000)
+  })
   autoUpdater.on('update-not-available', () => dlog('[update] up to date'))
   autoUpdater.on('error', (e) => dlog('[update] error', e.message))
   autoUpdater.checkForUpdates().catch(e => dlog('[update] check failed', e.message))
 }
-ipcMain.handle('install-update', () => { autoUpdater.quitAndInstall() })
+ipcMain.handle('install-update', () => { isQuitting = true; autoUpdater.quitAndInstall(true, true) })
 
 // ── QQ Music auth via cookie capture ──────────────────────────────
 ipcMain.handle('qq-auth', () => {

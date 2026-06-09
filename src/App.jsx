@@ -900,7 +900,7 @@ export default function App() {
       {update && (
         <div style={{ ...styles.updateBanner, borderColor: `${accent}66` }}>
           {update.state === 'downloaded'
-            ? <>🎉 新版本 v{update.version} 已就绪 <button style={{ ...styles.updateBtn, background: accent }} onClick={() => window.electronAPI.installUpdate()}>重启更新</button></>
+            ? <>🎉 新版本 v{update.version} 已下载，即将自动重启更新… <button style={{ ...styles.updateBtn, background: accent }} onClick={() => window.electronAPI.installUpdate()}>立即重启</button></>
             : update.state === 'downloading'
               ? <>⬇️ 正在下载新版本… {update.percent ?? 0}%</>
               : <>✨ 发现新版本 v{update.version}，下载中…</>}

@@ -1,6 +1,6 @@
 {
   "name": "mood-dj",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "description": "AI 心情电台桌面应用（QQ音乐 + Gemini）",
   "author": "Mood DJ",
   "main": "electron.js",
