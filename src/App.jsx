@@ -1012,6 +1012,7 @@ export default function App() {
         <MoodSwitcher
           anchorRect={moodPopAt}
           accent={accent}
+          accent2={accent2}
           seed={currentTrack?.mid || currentTrack?.name || 'mood'}
           isLoading={isLoading}
           onClose={() => setMoodPopAt(null)}
