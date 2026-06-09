@@ -131,10 +131,59 @@ input:focus, textarea:focus {
 /* 心跳消费者：跟着 --pulse(实时低频)缩放/发光，让"正在播放"像活的。
    只用 transform/box-shadow，不碰文字所在层 → 不糊字；暂停时 --pulse→0 自然停。
    .pulse-art 上一层若有 .floaty(平移)，两者分属不同元素故不冲突。 */
-.pulse-art { transform: scale(calc(1 + var(--pulse, 0) * 0.024)); transition: transform .08s ease-out; will-change: transform; }
+.pulse-art { transform: scale(calc(1 + var(--pulse, 0) * 0.07)); transition: transform .07s ease-out, box-shadow .07s ease-out; will-change: transform, box-shadow; }
 .pulse-glow { transition: box-shadow .08s ease-out; }
 @keyframes songPop { from { opacity: .35; transform: scale(.965); } to { opacity: 1; transform: scale(1); } }
 .song-pop { animation: songPop .42s cubic-bezier(.22,.61,.36,1) both; }
+
+/* 液体背景：每首歌主题排布的专辑色光斑，缓慢形变(border-radius)+漂移(translate)+随 --pulse 涨缩，
+   screen 混合叠成熔岩灯般的流动。两条动画分管不同属性故不冲突。 */
+.liquid-wrap { position: absolute; inset: 0; z-index: 1; pointer-events: none; overflow: hidden; }
+.liquid-field { position: absolute; inset: -16%; }   /* 留边给 goo 区域 + blob 漂移到边外 */
+/* 内嵌版：落在卡片渐变之上、文字之下（z-index:-1，父级需 isolation:isolate） */
+.liquid-layer { position: absolute; inset: 0; z-index: -1; pointer-events: none; overflow: hidden; }
+/* 液体边框：blob 贴边缘流动；z-index:-1 文字永远在其上 → 不挡可读性 */
+.liquid-edge {
+  position: absolute; inset: 0; z-index: -1; pointer-events: none; overflow: hidden;
+  border-radius: inherit;
+}
+/* 液体方块（goo metaball）：方块实体 + 沿边小水珠一起 goo 融合 → 边缘鼓出圆润水珠、相邻拉丝粘连。
+   水珠各自错峰"鼓出/缩回"(lqpop) → 鼓包沿边游走、像水面表面张力；鼓点(--beat)让水珠"溅"得更大。
+   文字在另一层(z:1)不进滤镜 → 清晰。 */
+.liquid-box { position: absolute; inset: 0; z-index: 0; pointer-events: none; }
+.liquid-box-field { position: absolute; inset: 0; }
+.liquid-box-body { position: absolute; inset: 0; }
+/* 水珠位置由 JS 让它绕边框公转(满四周漂移)；大小 = 实时音量 var(--pulse) × 每颗系数 --f + 鼓点冲量 --beat。
+   鼓点就地鼓出(合拍) + 位置一直在漂 → 突起点位永不固定。无声→0→收平。 */
+.liquid-box-blob {
+  position: absolute; left: 50%; top: 50%;
+  transform: translate(-50%, -50%) scale(calc((var(--pulse, 0) * 1.5 + var(--beat, 0) * 1.0) * var(--f, 1)));
+  transition: transform .06s linear;
+  background: #0b0e16; border-radius: 50%;
+  will-change: transform, left, top;
+}
+.liquid-blob {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  border-radius: 42% 58% 63% 37% / 45% 38% 62% 55%;
+  filter: blur(10px);
+  mix-blend-mode: screen;
+  animation-name: blobMorph, blobDrift;
+  animation-timing-function: ease-in-out, ease-in-out;
+  animation-iteration-count: infinite, infinite;
+  animation-direction: alternate, alternate;
+  will-change: transform, border-radius;
+}
+@keyframes blobMorph {
+  0%   { border-radius: 42% 58% 63% 37% / 45% 38% 62% 55%; }
+  50%  { border-radius: 58% 42% 39% 61% / 53% 60% 40% 47%; }
+  100% { border-radius: 63% 37% 54% 46% / 38% 52% 48% 62%; }
+}
+/* 漂移 + 随 --pulse 强力鼓胀：鼓点一来整片液体明显涨大（系数拉到 0.6/0.8） */
+@keyframes blobDrift {
+  0%   { transform: translate(calc(-50% - var(--drift, 6%)), calc(-50% + var(--drift, 6%))) scale(calc(0.82 + var(--pulse, 0) * 0.6)); }
+  100% { transform: translate(calc(-50% + var(--drift, 6%)), calc(-50% - var(--drift, 6%))) scale(calc(1.02 + var(--pulse, 0) * 0.8)); }
+}
 
 /* 氛围光晕缓慢漂移，让背景"活着"而不是静止 */
 @keyframes drift {
@@ -144,8 +193,10 @@ input:focus, textarea:focus {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .breathe, .floaty, .song-pop { animation: none !important; }
+  .breathe, .floaty, .song-pop, .liquid-blob, .liquid-box-blob { animation: none !important; }
   .pulse-art { transform: none !important; }
+  .liquid-blob { transform: translate(-50%, -50%) !important; }
+  .liquid-box-blob { transform: translate(-50%, -50%) scale(0.5) !important; transition: none !important; }
   *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; }
 }
 

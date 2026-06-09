@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
 import Lyrics from './Lyrics'
 import Icon from './Icon'
+import LiquidLayer from './LiquidLayer'
+import LiquidBox from './LiquidBox'
 import { vivid, vividDark, albumPalette } from '../ui/surface'
 
 // 听歌仪表盘（bento）：把"正在播放"拆成有意义、画面填满的方块。
@@ -106,6 +108,9 @@ export default function NowPlayingBento({
   const dots = Math.min(queueCount, 9)
   const heroSurf = vivid(accent, accent2, 26)
   const pal = albumPalette(accent)   // 从专辑色推导的协调调色板（邻近色+补色）
+  const seed = track?.mid || track?.id || title   // 每首歌的视觉种子
+  // 让卡片成为内嵌液体层的容器：液体落在渐变之上、文字之下（z-index:-1 + isolation）
+  const clip = { position: 'relative', overflow: 'hidden', isolation: 'isolate' }
 
   return (
     <div style={s.root}>
@@ -113,9 +118,9 @@ export default function NowPlayingBento({
         {/* 左栏：播放器 + 律动/心情 + 接下来 */}
         <div style={s.left}>
           {/* 正在播放（左栏顶，封面更大；accent 辉光晕进背景） */}
-          <div key={track?.mid || title} className="song-pop pulse-glow" style={{ ...heroSurf, ...s.hero, boxShadow: `${heroSurf.boxShadow}, 0 20px 70px -20px color-mix(in srgb, ${accent} 50%, transparent), 0 0 calc(var(--pulse,0) * 60px) -12px color-mix(in srgb, ${accent} 80%, transparent)` }}>
+          <div key={track?.mid || title} className="song-pop pulse-glow" style={{ ...heroSurf, ...s.hero, boxShadow: `${heroSurf.boxShadow}, 0 20px 70px -20px color-mix(in srgb, ${accent} 50%, transparent), 0 0 calc(var(--pulse,0) * 100px) -10px color-mix(in srgb, ${accent} 88%, transparent)` }}>
             <div style={s.heroArtWrap} className={isPlaying ? 'floaty' : ''}>
-              {art ? <img src={art} alt="" style={s.heroArt} className="pulse-art" draggable={false} />
+              {art ? <img src={art} alt="" style={{ ...s.heroArt, boxShadow: `${s.heroArt.boxShadow}, 0 0 calc(8px + var(--pulse,0) * 60px) calc(var(--pulse,0) * 6px) color-mix(in srgb, ${accent} 85%, transparent)` }} className="pulse-art" draggable={false} />
                    : <div style={{ ...s.heroArt, ...s.ph }} className="pulse-art">🎵</div>}
             </div>
             <div style={s.heroMid}>
@@ -135,7 +140,7 @@ export default function NowPlayingBento({
                 <span style={{ ...s.time, color: 'rgba(255,255,255,0.85)' }} className="led">{fmt(effDur)}</span>
               </div>
               <div style={s.heroCtrl}>
-                <button style={{ ...s.playBtn, boxShadow: `${s.playBtn.boxShadow}, 0 0 calc(var(--pulse,0) * 30px) color-mix(in srgb, ${accent} 85%, transparent)` }} onClick={onTogglePlay} title="播放/暂停"><Icon name={isPlaying ? 'pause' : 'play'} size={22} color={accent} filled /></button>
+                <button style={{ ...s.playBtn, boxShadow: `${s.playBtn.boxShadow}, 0 0 calc(var(--pulse,0) * 44px) calc(var(--pulse,0) * 3px) color-mix(in srgb, ${accent} 90%, transparent)` }} onClick={onTogglePlay} title="播放/暂停"><Icon name={isPlaying ? 'pause' : 'play'} size={22} color={accent} filled /></button>
                 <button style={s.nextBtn} onClick={onNext} title="下一首"><Icon name="next" size={17} color="#fff" filled /></button>
               </div>
             </div>
@@ -143,20 +148,29 @@ export default function NowPlayingBento({
 
           {/* 律动 | 心情 */}
           <div style={s.leftGrid}>
-            <div style={{ ...vivid(pal.energy, pal.energy, 20), ...s.tile }}>
+            <div style={{ ...vivid(pal.energy, pal.energy, 20), ...s.tile, ...clip }}>
+              <LiquidLayer accent={pal.energy} seed={`${seed}-e`} opacity={0.42} />
               <div style={s.tLabel}>律动</div>
               <MiniWave analyser={analyser} color={`color-mix(in srgb, ${pal.energy} 50%, #ffffff)`} isPlaying={isPlaying} />
               <div style={s.tValRow}><span className="led" style={s.tLed}>{Math.round(energy * 100)}</span><span style={s.tUnit}>能量</span></div>
             </div>
-            <div style={{ ...vivid(accent, accent2, 20), ...s.tile }}>
+            <div style={{ ...vivid(accent, accent2, 20), ...s.tile, ...clip }}>
+              <LiquidLayer accent={accent} seed={`${seed}-m`} opacity={0.42} />
               <div style={s.tLabel}>心情</div>
-              <div style={s.moodMain}><span style={s.moodEmoji}>{emoji}</span><span style={s.moodName}>{mood}</span></div>
-              <div style={s.bars}><Bar label="能量" v={energy} /><Bar label="情绪" v={valence} /></div>
+              <div style={s.moodMain}>
+                <span style={s.moodEmojiWrap}><span style={s.moodEmoji}>{emoji}</span></span>
+                <span style={s.moodName}>{mood}</span>
+              </div>
+              <div style={s.gauges}>
+                <MoodGauge label="能量" v={energy} accent={accent} />
+                <MoodGauge label="情绪" v={valence} accent={accent} />
+              </div>
             </div>
           </div>
 
           {/* 接下来：整条待播列表（撑满左栏剩余高度，可滚），点开管理队列 */}
-          <div style={{ ...vividDark(pal.next, 20), ...s.tile, flex: 1, overflow: 'hidden', cursor: 'pointer' }} onClick={onOpenQueue} title="查看/管理队列">
+          <div style={{ ...vividDark(pal.next, 20), ...s.tile, flex: 1, cursor: 'pointer', ...clip }} onClick={onOpenQueue} title="查看/管理队列">
+            <LiquidLayer accent={pal.next} seed={`${seed}-n`} opacity={0.32} />
             <div style={s.upHead}><span style={s.tLabel}>接下来</span><span style={s.upCount}>{queueCount} 首待播</span></div>
             <div style={s.upList} className="lyrics-scroll">
               {upNext.slice(0, 30).map((t, i) => (
@@ -178,14 +192,18 @@ export default function NowPlayingBento({
 
         {/* 右栏：DJ 故事 + 歌词（撑满高度） */}
         <div style={s.right}>
-          <div style={{ ...vividDark(pal.dj, 20), ...s.tile }}>
+          <div style={{ ...vividDark(pal.dj, 20), ...s.tile, ...clip }}>
+            <LiquidLayer accent={pal.dj} seed={`${seed}-d`} opacity={0.4} />
             <div style={s.tLabel}>DJ · 这首的故事</div>
             <div style={s.djName}><Icon name="mic" size={13} color="#e9d5ff" /> {djName || '你的电台'}</div>
             <div style={s.story}>{story || '正在为这首歌写一句话…'}</div>
           </div>
-          <div style={{ ...vividDark(accent, 20), ...s.lyricTile }}>
-            <div style={s.tLabel}>♪ 歌词</div>
-            <Lyrics fill lines={lyric?.lines || []} hasTrans={lyric?.hasTrans} audioRef={audioRef} accent={accent} />
+          <div style={{ ...s.lyricTile, position: 'relative' }}>
+            <LiquidBox accent={accent} seed={`${seed}-l`} radius={20} />
+            <div style={{ position: 'relative', zIndex: 1, flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <div style={s.tLabel}>♪ 歌词</div>
+              <Lyrics fill lines={lyric?.lines || []} hasTrans={lyric?.hasTrans} audioRef={audioRef} accent={accent} />
+            </div>
           </div>
         </div>
       </div>
@@ -215,11 +233,20 @@ export default function NowPlayingBento({
   )
 }
 
-function Bar({ label, v }) {
+// 心情仪表条：暗槽内嵌 + accent 渐变辉光填充 + 发光游标 + LED 读数（和「律动」一个质感）
+function MoodGauge({ label, v, accent }) {
+  const pct = Math.max(0, Math.min(100, Math.round((v || 0) * 100)))
   return (
-    <div style={s.barRow}>
-      <span style={s.barLabel}>{label}</span>
-      <div style={s.barTrack}><div style={{ ...s.barFill, width: `${Math.round(v * 100)}%` }} /></div>
+    <div style={s.gRow}>
+      <span style={s.gLabel}>{label}</span>
+      <div style={s.gTrack}>
+        <div style={{ ...s.gFill, width: `${pct}%`,
+          background: `linear-gradient(90deg, color-mix(in srgb, ${accent} 50%, #ffffff), #ffffff)`,
+          boxShadow: `0 0 10px color-mix(in srgb, ${accent} 55%, rgba(255,255,255,0.55))` }} />
+        <div style={{ ...s.gDot, left: `${pct}%`,
+          boxShadow: `0 0 8px color-mix(in srgb, ${accent} 70%, #ffffff), 0 1px 3px rgba(0,0,0,0.6)` }} />
+      </div>
+      <span className="led" style={s.gVal}>{pct}</span>
     </div>
   )
 }
@@ -258,14 +285,17 @@ const s = {
   tLed: { fontSize: 26, color: '#fff' },
   tUnit: { fontSize: 12, color: 'rgba(255,255,255,0.78)' },
 
-  moodMain: { display: 'flex', alignItems: 'center', gap: 8, marginTop: 2 },
-  moodEmoji: { fontSize: 28 },
-  moodName: { fontSize: 22, fontWeight: 800, color: '#fff', textShadow: '0 1px 6px rgba(0,0,0,0.4)' },
-  bars: { marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: 6 },
-  barRow: { display: 'flex', alignItems: 'center', gap: 8 },
-  barLabel: { fontSize: 11, color: 'rgba(255,255,255,0.8)', width: 28, flexShrink: 0 },
-  barTrack: { flex: 1, height: 6, background: 'rgba(0,0,0,0.28)', borderRadius: 3, overflow: 'hidden' },
-  barFill: { height: '100%', background: 'rgba(255,255,255,0.9)', borderRadius: 3 },
+  moodMain: { display: 'flex', alignItems: 'center', gap: 10, marginTop: 3 },
+  moodEmojiWrap: { width: 38, height: 38, borderRadius: 11, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(255,255,255,0.13)', border: '1px solid rgba(255,255,255,0.2)', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.18), 0 2px 8px rgba(0,0,0,0.25)' },
+  moodEmoji: { fontSize: 21, lineHeight: 1 },
+  moodName: { fontSize: 17, fontWeight: 800, color: '#fff', textShadow: '0 1px 6px rgba(0,0,0,0.4)', lineHeight: 1.2, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', minWidth: 0 },
+  gauges: { marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: 10 },
+  gRow: { display: 'flex', alignItems: 'center', gap: 9 },
+  gLabel: { fontSize: 11, color: 'rgba(255,255,255,0.85)', width: 28, flexShrink: 0 },
+  gTrack: { position: 'relative', flex: 1, height: 8, borderRadius: 5, background: 'rgba(0,0,0,0.34)', boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.5)', border: '1px solid rgba(255,255,255,0.08)' },
+  gFill: { position: 'absolute', top: 0, left: 0, height: '100%', borderRadius: 5, transition: 'width .4s cubic-bezier(.22,.61,.36,1)' },
+  gDot: { position: 'absolute', top: '50%', width: 11, height: 11, borderRadius: '50%', transform: 'translate(-50%,-50%)', background: '#fff', transition: 'left .4s cubic-bezier(.22,.61,.36,1)' },
+  gVal: { fontSize: 14, color: '#fff', width: 26, textAlign: 'right', flexShrink: 0 },
 
   ph2: { background: 'rgba(255,255,255,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 },
   upHead: { display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' },

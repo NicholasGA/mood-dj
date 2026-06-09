@@ -147,9 +147,13 @@ export default function Visualizer({ moodConfig, isPlaying, analyser, track }) {
       s.kick *= 0.88
       const kick = s.kick * I
 
-      // 写心跳：低频铺底 + 鼓点冲击，整体乘以强度（暂停时趋零）
+      // 写心跳：三层叠加，让"所有歌"都像活的——
+      //   ① 缓慢呼吸底噪：没鼓点的安静歌也轻轻起伏，不会死寂
+      //   ② 整体能量 level：人声/旋律的强弱也参与，melodic 歌跟着唱
+      //   ③ 鼓点 kick：在前两层之上"顶"一下，beat 歌有明显冲击
       if (!reduceMotion && (pulseFrame = (pulseFrame + 1) % 2) === 0) {
-        const pulse = Math.min(1, (bass * 0.55 + kick * 0.85) * (0.4 + I * 0.6))
+        const breath = 0.5 + 0.5 * Math.sin(s.time * 1.2)
+        const pulse = Math.min(1, (0.10 + breath * 0.10 + level * 0.5 + kick * 0.95) * I)
         document.documentElement.style.setProperty('--pulse', pulse.toFixed(3))
       }
 

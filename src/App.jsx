@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import Onboarding from './components/Onboarding'
 import MoodInput from './components/MoodInput'
 import Visualizer from './components/Visualizer'
+import LiquidBackground from './components/LiquidBackground'
 import DJAnnouncement from './components/DJAnnouncement'
 import MiniPlayer from './components/MiniPlayer'
 import NicheDock from './components/NicheDock'
@@ -892,6 +893,7 @@ export default function App() {
       </div>
 
       <Visualizer moodConfig={vizMood} isPlaying={isPlaying} analyser={analyserRef} track={currentTrack} />
+      <LiquidBackground accent={accent} accent2={accent2} track={currentTrack} intensity={currentTrack ? 1 : 0.7} />
 
       {error && <div style={styles.errBanner} onClick={() => setError('')}>⚠️ {error} <span style={{ opacity: .5, fontSize: 11 }}>点击关闭</span></div>}
 
