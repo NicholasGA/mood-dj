@@ -9,7 +9,7 @@ import Icon from './components/Icon'
 import { searchTracks, getSongUrl, getLyric, searchPlaylists, getPlaylistTracks, searchByArtist } from './services/qqMusicApi'
 import { analyzeMood, generateStory, curateTracks, interpretRequest, configureLLM, hasLLMKey, analyzeTaste } from './services/claudeDJ'
 import { localStory, localMoodConfig } from './services/djText'
-import { freshen, pushRecent, removeAt, moveToFront } from './services/radio'
+import { freshen, pushRecent, removeAt, moveToFront, pushHistory } from './services/radio'
 import QueuePanel from './components/QueuePanel'
 import { keyToAction } from './services/shortcuts'
 import { remainingLabel, sleepVolume, nextDuration } from './services/sleepTimer'
@@ -195,6 +195,7 @@ export default function App() {
   function queueToFront(i) { const q = moveToFront(queueRef.current, i); queueRef.current = q; setQueue(q) }
   function queueRemove(i) { const q = removeAt(queueRef.current, i); queueRef.current = q; setQueue(q) }
   function queueClear() { queueRef.current = []; setQueue([]); setShowQueue(false) }
+  function playFromHistory(track) { if (!track?.mid) return; queueRef.current = [track, ...queueRef.current]; setQueue(queueRef.current); setShowQueue(false); playNext() }
 
   // 当前歌曲变化时，从封面提取主题色（失败则回退心情色）
   useEffect(() => {
@@ -369,6 +370,7 @@ export default function App() {
           setQueue(q)
           setError('')
           memoryRef.current.recentMids = pushRecent(memoryRef.current.recentMids || [], next.mid)  // 记最近放过
+          memoryRef.current.history = pushHistory(memoryRef.current.history || [], next, 100)       // 播放历史(新→旧)
           if (q.length < 6) replenishQueue()          // 偏低就后台补歌（不阻塞）
           return
         } catch { /* 这首放不了，试下一首 */ }
@@ -747,12 +749,14 @@ export default function App() {
       {showQueue && (
         <QueuePanel
           queue={queue}
+          history={memoryRef.current.history || []}
           accent={accent}
           onClose={() => setShowQueue(false)}
           onPlayAt={queuePlayAt}
           onToFront={queueToFront}
           onRemove={queueRemove}
           onClear={queueClear}
+          onPlayHistory={playFromHistory}
         />
       )}
     </div>

@@ -45,3 +45,11 @@ export function moveToFront(list, i) {
   copy.unshift(item)
   return copy
 }
+
+// 播放历史（新→旧，按 mid 去重、封顶）。at 作参数便于测试
+export function pushHistory(list, track, cap = 100, at = Date.now()) {
+  if (!track?.mid) return (list || []).slice()
+  const rest = (list || []).filter(t => t.mid !== track.mid)
+  rest.unshift({ mid: track.mid, id: track.id, name: track.name, artists: track.artists, album: track.album, media_mid: track.media_mid, at })
+  return rest.slice(0, cap)
+}

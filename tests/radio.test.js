@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { capPerArtist, excludeRecent, pushRecent, freshen, removeAt, moveToFront } from '../src/services/radio'
+import { capPerArtist, excludeRecent, pushRecent, freshen, removeAt, moveToFront, pushHistory } from '../src/services/radio'
 
 const mk = (mid, artist) => ({ mid, artists: [{ name: artist }] })
 
@@ -71,5 +71,30 @@ describe('moveToFront', () => {
   it('i=0 或越界 → 原样副本', () => {
     expect(moveToFront(['a', 'b'], 0)).toEqual(['a', 'b'])
     expect(moveToFront(['a', 'b'], 9)).toEqual(['a', 'b'])
+  })
+})
+
+describe('pushHistory', () => {
+  const t = (mid, name) => ({ mid, name, artists: [{ name: 'A' }] })
+  it('新歌放最前、带 at 时间戳', () => {
+    const h = pushHistory([], t('1', '甲'), 100, 1000)
+    expect(h[0].mid).toBe('1')
+    expect(h[0].at).toBe(1000)
+    expect(h[0].name).toBe('甲')
+  })
+  it('重复播放 → 提到最前、不重复', () => {
+    let h = pushHistory([], t('1'), 100, 1)
+    h = pushHistory(h, t('2'), 100, 2)
+    h = pushHistory(h, t('1'), 100, 3)   // 再放 1
+    expect(h.map(x => x.mid)).toEqual(['1', '2'])
+    expect(h[0].at).toBe(3)
+  })
+  it('封顶 cap，丢最旧', () => {
+    let h = []
+    for (let i = 1; i <= 5; i++) h = pushHistory(h, t(String(i)), 3, i)
+    expect(h.map(x => x.mid)).toEqual(['5', '4', '3'])
+  })
+  it('无 mid → 原样副本', () => {
+    expect(pushHistory([t('1')], {}, 100, 1).map(x => x.mid)).toEqual(['1'])
   })
 })
