@@ -300,8 +300,8 @@ export default function App() {
   function playSearched(track) { if (!track?.mid) return; queueRef.current = [track, ...queueRef.current]; setQueue(queueRef.current); setShowSearch(false); playNext() }
   function queueSearched(track) { if (!track?.mid) return; queueRef.current = [...queueRef.current, track]; setQueue(queueRef.current); showToast(`已加入队列：${track.name}`) }
   function playList(tracks) { if (!tracks?.length) return; queueRef.current = tracks.filter(t => t?.mid); setQueue(queueRef.current); setShowSearch(false); playNext() }
-  // 读取某个歌单（我喜欢 / 自建 / 收藏的）的歌
-  function loadPlaylist(id) { return getPlaylistTracks(qqCookiesRef.current, id, 100) }
+  // 读取某个歌单（我喜欢 / 自建 / 收藏的）的歌：走主进程(带登录 cookie，能读别人公开歌单)
+  function loadPlaylist(id) { return window.electronAPI.getQQPlaylistTracks(id, 100) }
 
   // 把一批歌导出成一个新 QQ 歌单（签名版接口）
   async function exportToQQ(tracks, label) {
