@@ -41,13 +41,23 @@ export function vivid(c1, c2 = c1, radius = 22) {
       `radial-gradient(135% 135% at 26% 16%, ${c1} 0%, ${c2} 58%, color-mix(in srgb, ${c2} 60%, #0a0a0f) 100%)`,
     ].join(', '),
     borderRadius: radius,
-    border: '1px solid rgba(255,255,255,0.18)',
+    border: '1px solid rgba(255,255,255,0.08)',   // 降低整圈描边的"贴纸感"，质感靠下面的方向性内阴影
     boxShadow: [
-      'inset 0 1px 0 rgba(255,255,255,0.32)',                                   // 顶部高光：玻璃吃光
-      'inset 0 -20px 36px -22px rgba(0,0,0,0.55)',                              // 底部内阴影：弧面厚度
-      `0 16px 38px -16px color-mix(in srgb, ${c1} 60%, transparent)`,           // 远处同色柔阴影
-      `0 0 26px -4px color-mix(in srgb, ${c1} 48%, transparent)`,               // 同色辉光
+      'inset 0 1px 0 rgba(255,255,255,0.30)',                                   // 顶部高光：玻璃吃光（亮）
+      'inset 0 -20px 36px -22px rgba(0,0,0,0.55)',                              // 底部内阴影：弧面厚度（暗）
+      `0 16px 38px -16px color-mix(in srgb, ${c1} 55%, transparent)`,           // 远处同色柔阴影
+      `0 0 24px -6px color-mix(in srgb, ${c1} 42%, transparent)`,               // 同色辉光
     ].join(', '),
+  }
+}
+
+// 暗块（接下来/DJ 故事这类文字多的块）：深色 + 一丝色相染色，不发光，用来托住亮块、建立两亮两暗的层级
+export function vividDark(tint, radius = 20) {
+  return {
+    background: `radial-gradient(125% 105% at 28% 0%, color-mix(in srgb, ${tint} 30%, #0c0f17) 0%, #0a0c12 82%)`,
+    borderRadius: radius,
+    border: '1px solid rgba(255,255,255,0.07)',
+    boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.11), inset 0 -18px 34px -24px rgba(0,0,0,0.5), 0 14px 30px -18px rgba(0,0,0,0.6)',
   }
 }
 
