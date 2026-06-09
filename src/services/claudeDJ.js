@@ -83,6 +83,11 @@ async function callOpenRouter(system, userMsg, maxTokens, temperature) {
 // 再依次试每个未冷却的 Gemini key，限流则冷却换下一个；全挂则用 OpenRouter。
 async function gemini(system, userMsg, { maxTokens = 600, temperature = 0.9, kind = 'core' } = {}) {
   const now = Date.now()
+  // 「歌曲介绍」优先走 OpenRouter（免费、额度大）：彻底不动 Gemini 的小配额，把它全留给核心(心情分析/选歌)。
+  // OpenRouter 没配 key 或挂了，才退回 Gemini 走下面的流程。
+  if (kind === 'story' && OPENROUTER_KEY) {
+    try { return await callOpenRouter(system, userMsg, maxTokens, temperature) } catch {}
+  }
   const budget = evalBudget(loadBudget(), now)
   if (budget.blockCore || (kind === 'story' && budget.blockStory)) {
     const e = new Error('budget'); e.budgetExhausted = true; throw e
