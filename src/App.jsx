@@ -41,6 +41,8 @@ export default function App() {
   const [showQueue, setShowQueue] = useState(false)   // 播放队列面板
   const [showPicker, setShowPicker] = useState(false)   // 播放中点"换心情"→ 回到选心情
   const [maximized, setMaximized] = useState(false)     // 最大化时去掉窗口圆角
+  const [repeatOne, setRepeatOne] = useState(false)     // 单曲循环：放完重头放本首，不续下一首
+  const repeatOneRef = useRef(repeatOne)                // 给 onEnded 闭包读最新值
   const [favMids, setFavMids] = useState(() => new Set())   // "我喜欢"全部 mid（标已收藏/新歌）
   const [sleepMin, setSleepMin] = useState(0)   // 睡眠定时（分钟，0=关）
   const [sleepLeft, setSleepLeft] = useState('')   // 剩余 mm:ss
@@ -110,6 +112,7 @@ export default function App() {
   }, [])
 
   useEffect(() => { queueRef.current = queue }, [queue])
+  useEffect(() => { repeatOneRef.current = repeatOne }, [repeatOne])
   useEffect(() => { currentTrackRef.current = currentTrack }, [currentTrack])
   useEffect(() => { moodConfigRef.current = moodConfig }, [moodConfig])
   useEffect(() => { qqCookiesRef.current = qqCookies }, [qqCookies])
@@ -337,8 +340,11 @@ export default function App() {
     const audio = audioRef.current
     applyVolume()   // 初始按用户音量(默认0.8)；不再硬设，避免覆盖用户值
 
-    // playNext 自带 isAdvancingRef 重入保护
-    const onEnded = () => playNext()
+    // 单曲循环：放完重头再放本首；否则续下一首（playNext 自带 isAdvancingRef 重入保护）
+    const onEnded = () => {
+      if (repeatOneRef.current) { const a = audioRef.current; if (a) { a.currentTime = 0; a.play().catch(() => {}) } return }
+      playNext()
+    }
     const onPlay  = () => setIsPlaying(true)
     const onPause = () => setIsPlaying(false)
     const onError = () => playNext()
@@ -921,6 +927,7 @@ export default function App() {
             djName={getPersona()?.name} analyser={analyserRef} volume={volume} onVolume={setUserVolume}
             inFav={favMids.has(currentTrack.mid)}
             onRepick={() => setShowPicker(true)}
+            repeatOne={repeatOne} onToggleRepeat={() => setRepeatOne(v => !v)}
           />
         ) : (
           /* 选心情：未开台，或播放中点了"换心情"。整屏 bento 心情选择器，居中 */

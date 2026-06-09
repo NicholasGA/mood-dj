@@ -54,6 +54,7 @@ export default function NowPlayingBento({
   track, isPlaying, loadingTrack, audioRef, accent = '#31c27c', accent2 = '#4f46e5',
   onTogglePlay, onNext, onLike, onDislike, onVibe, onSteer, onOpenQueue,
   queueCount = 0, nextTrack, upNext = [], lyric, moodConfig, story, djName, analyser, volume = 0.8, onVolume, onRepick, inFav = false,
+  repeatOne = false, onToggleRepeat,
 }) {
   const [cur, setCur] = useState(0)        // 当前播放秒数
   const [rawDur, setRawDur] = useState(0)  // audio.duration（QQ 流有时是 Infinity）
@@ -219,6 +220,12 @@ export default function NowPlayingBento({
         <button style={s.pill} onClick={() => onVibe('up')}><Icon name="flame" size={14} color="#fb923c" /> 嗨</button>
         <button style={s.pill} onClick={() => onVibe('down')}><Icon name="moon" size={14} color="#93c5fd" /> 静</button>
         <button style={s.pill} onClick={() => onVibe('flavor')}><Icon name="shuffle" size={14} color="#c4b5fd" /> 换</button>
+        <button
+          style={{ ...s.pill, ...(repeatOne ? { background: `color-mix(in srgb, ${accent} 78%, transparent)`, borderColor: accent, color: '#fff' } : {}) }}
+          onClick={onToggleRepeat}
+          title={repeatOne ? '单曲循环已开：放完重头再放本首（不续下一首）' : '单曲循环'}>
+          <Icon name="repeat1" size={14} color={repeatOne ? '#fff' : '#c4b5fd'} /> 单曲循环
+        </button>
         <div style={s.steerWrap}>
           <span style={s.steerMic}><Icon name="mic" size={15} color="#9ca3af" /></span>
           <input style={s.steerInput} placeholder="跟 DJ 说…「放点周杰伦但安静的」" value={steerText}
