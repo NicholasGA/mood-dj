@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { localStory, localMoodConfig } from '../src/services/djText'
+import { localStory, localMoodConfig, memoryNote } from '../src/services/djText'
 
 describe('localStory（零 API 兜底简介）', () => {
   it('同一首歌每次返回同一句（按 mid 稳定）', () => {
@@ -44,5 +44,58 @@ describe('localMoodConfig（AI 失败时按关键词兜底）', () => {
 
   it('空输入 → 随心', () => {
     expect(localMoodConfig('').mood_name).toBe('随心')
+  })
+})
+
+describe('memoryNote（把听歌记忆说成一句「记得你」）', () => {
+  it('收藏过这首 + 同心情 → 点出当时的心情', () => {
+    const s = memoryNote({ mid: 'm1', artists: [{ name: '周杰伦' }] },
+      { likedTracks: [{ mid: 'm1', mood: '伤感' }], currentMood: '伤感' })
+    expect(s).toContain('伤感')
+    expect(s).toContain('❤️')
+  })
+
+  it('收藏过这首 + 不同心情 → 提当时收藏的心情', () => {
+    const s = memoryNote({ mid: 'm1' }, { likedTracks: [{ mid: 'm1', mood: '深夜' }], currentMood: '开心' })
+    expect(s).toContain('深夜')
+  })
+
+  it('收藏过这首但没记心情 → 仍认得', () => {
+    expect(memoryNote({ mid: 'm1' }, { likedTracks: [{ mid: 'm1', mood: '' }] })).toContain('❤️')
+  })
+
+  it('常听这位歌手 → 点名歌手，且不是「收藏过」', () => {
+    const s = memoryNote({ mid: 'new', artists: [{ name: '林俊杰' }] }, { topArtists: ['林俊杰'] })
+    expect(s).toContain('林俊杰')
+    expect(s).not.toContain('❤️')
+  })
+
+  it('放过没收藏 → 老相识', () => {
+    const s = memoryNote({ mid: 'h1', artists: [{ name: '陌生人' }] },
+      { history: [{ mid: 'h1', artists: [{ name: '陌生人' }] }] })
+    expect(s).toContain('听过')
+  })
+
+  it('有口味画像时的全新歌手 → 新发现', () => {
+    const s = memoryNote({ mid: 'z', artists: [{ name: '新人X' }] },
+      { likedTracks: Array.from({ length: 5 }, (_, i) => ({ mid: 'l' + i, artists: [{ name: '老歌手' }] })) })
+    expect(s).toContain('新发现')
+    expect(s).toContain('新人X')
+  })
+
+  it('新用户（没口味画像）→ 不喊「新发现」，返回空让普通故事兜底', () => {
+    expect(memoryNote({ mid: 'z', artists: [{ name: '新人X' }] }, {})).toBe('')
+  })
+
+  it('优先级：收藏过 > 常听歌手', () => {
+    const s = memoryNote({ mid: 'm1', artists: [{ name: 'A' }] },
+      { likedTracks: [{ mid: 'm1', mood: '' }], topArtists: ['A'] })
+    expect(s).toContain('❤️')
+  })
+
+  it('无 mid / 空对象不报错', () => {
+    expect(memoryNote(null)).toBe('')
+    expect(memoryNote({ mid: '' })).toBe('')
+    expect(typeof memoryNote({ mid: 'x' }, {})).toBe('string')
   })
 })

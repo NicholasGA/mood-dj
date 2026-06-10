@@ -14,6 +14,40 @@ export function localStory(track) {
   return tmpl[h % tmpl.length]
 }
 
+// 把已收集的听歌记忆变成一句「它记得你」的点名：收藏过 / 常听这位 / 旧识 / 新发现。
+// 纯函数、零 API、每次播放实时算（不进 AI 故事缓存，保证随心情与收藏变化而新）。无可说的返回 ''。
+// mem: { likedTracks, history, topArtists, currentMood }
+export function memoryNote(track, mem = {}) {
+  if (!track?.mid) return ''
+  const { likedTracks = [], history = [], topArtists = [], currentMood = '' } = mem
+  const firstArtist = track.artists?.[0]?.name || ''
+
+  // 1) 这首歌本身收藏过 —— 最强的「记得你」，且带上当时的心情
+  const liked = likedTracks.find(t => t.mid === track.mid)
+  if (liked) {
+    if (liked.mood && liked.mood === currentMood) return `上次也是「${currentMood}」的心情，你把它收藏了 ❤️`
+    if (liked.mood) return `你在「${liked.mood}」时收藏过它，又见面了 ❤️`
+    return `你收藏过这首，再听一遍 ❤️`
+  }
+
+  // 2) 常听这位歌手
+  if (firstArtist && topArtists.includes(firstArtist)) return `你常听 ${firstArtist}，这首应该对味`
+
+  // 3) 之前放过、没收藏 —— 老相识
+  if (history.some(h => h.mid === track.mid)) return `这首你听过，换个心情再陪你听听`
+
+  // 4) 全新歌手 —— 仅当听众已有一定口味画像时「新发现」才有意义（否则新用户每首都新，反成噪音）
+  const known = firstArtist && (
+    topArtists.includes(firstArtist) ||
+    likedTracks.some(t => (t.artists || []).some(a => a.name === firstArtist)) ||
+    history.some(h => (h.artists || []).some(a => a.name === firstArtist))
+  )
+  const hasTaste = likedTracks.length >= 5 || topArtists.length >= 3
+  if (hasTaste && firstArtist && !known) return `新发现：你还没听过的 ${firstArtist}`
+
+  return ''
+}
+
 // 心情关键词 → 电台配置。analyzeMood（Gemini）失败时的本地兜底，比通用歌单更贴合心情。
 const MOOD_RULES = [
   { re: /开心|快乐|高兴|愉快|嗨|兴奋|爽|喜悦|好心情/, name: '开心', emoji: '😄',

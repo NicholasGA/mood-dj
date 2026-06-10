@@ -342,15 +342,14 @@ export async function generatePersona(taste = {}) {
   }
 }
 
-// 单首歌一句话「故事」：结合歌词点出情绪/主题/创作背景。调用方按 mid 永久缓存复用 → 省配额
-export async function generateStory(track, lyricSnippet = '', taste = {}) {
+// 单首歌一句话「故事」：结合歌词点出情绪/主题/创作背景。调用方按 mid 永久缓存复用 → 省配额。
+// 注：听众记忆（常听/收藏过/心情）不放这里——那会被永久缓存成过期信息，改由实时的 memoryNote 承担。
+export async function generateStory(track, lyricSnippet = '') {
   const artist = track?.artists?.map(a => a.name).join('/') || '未知'
-  const tasteHint = taste.likedArtists?.length && taste.likedArtists.includes(track?.artists?.[0]?.name)
-    ? '（这是听众钟爱的歌手，可自然点一下）' : ''
   const lyricBlock = lyricSnippet ? `\n部分歌词：\n${lyricSnippet}` : '\n（暂无歌词，可讲风格/情绪）'
   const system = withPersona(`你是博学、有洞察的音乐电台DJ。只输出一句话，不换行、不解释、不加引号。`)
   const text = await gemini(system, `
-歌曲：${track?.name} - ${artist}${tasteHint}${lyricBlock}
+歌曲：${track?.name} - ${artist}${lyricBlock}
 
 用一句话(≤30字)介绍这首歌：优先结合上面的歌词点出它的情绪/故事/主题；若你确知真实创作背景可讲；不确定就讲风格，别编造具体事实(假获奖/假年份)。口语、有DJ腔。`, { maxTokens: 200, temperature: 0.85, kind: 'story' })
   const one = (text || '').split(/[\n。！!?？]/)[0].trim().replace(/^["“「]|["”」]$/g, '')

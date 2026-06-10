@@ -10,7 +10,7 @@ import NowPlayingBento from './components/NowPlayingBento'
 import Icon from './components/Icon'
 import { searchTracks, getSongUrl, getLyric, searchPlaylists, getPlaylistTracks, searchByArtist } from './services/qqMusicApi'
 import { analyzeMood, generateStory, curateTracks, interpretRequest, recommendSongs, configureLLM, hasLLMKey, analyzeTaste, generatePersona, configurePersona, getPersona } from './services/claudeDJ'
-import { localStory, localMoodConfig } from './services/djText'
+import { localStory, localMoodConfig, memoryNote } from './services/djText'
 import { greeting, localPersona, vibeReaction } from './services/djPersona'
 import { effectiveVolume, clampVol } from './services/audioVolume'
 import { glassSoft } from './ui/surface'
@@ -373,16 +373,32 @@ export default function App() {
     }
   }, [])
 
+  // 「它记得你」的一句点名：实时算（不缓存），数据全来自已收集的 likedTracks/history + 当前心情
+  const djMemoryNote = useCallback((track) => memoryNote(track, {
+    likedTracks: memoryRef.current.likedTracks || [],
+    history: memoryRef.current.history || [],
+    topArtists: [...new Set([...(favRef.current?.topArtists || []), ...likedArtists()])],
+    currentMood: moodConfigRef.current?.mood_name || '',
+  }), [])
+
+  // 记忆点名 + 歌词故事拼成一句 DJ 词：有记忆就先点名，再接故事
+  const djLine = useCallback((track, story) => {
+    const note = djMemoryNote(track)
+    if (!note) return story
+    if (!story || story === note) return note
+    return `${note} · ${story}`
+  }, [djMemoryNote])
+
   const showDJ = useCallback((next) => {
     // 立刻显示：有缓存的歌词故事就用，否则本地兜底——保证每首都有一句（AI 故事由下面副作用异步补上）
-    const line = memoryRef.current.songStories?.[next.mid] || localStory(next)
+    const line = djLine(next, memoryRef.current.songStories?.[next.mid] || localStory(next))
     const speak = Date.now() - lastSpokeRef.current > 45000   // 语音节流：≥45s 才出声
     if (speak) lastSpokeRef.current = Date.now()
     setDjSpeak(speak)
     setAnnouncement(line)
     setShowAnnouncement(true)
     setTimeout(() => setShowAnnouncement(false), 8000)
-  }, [])
+  }, [djLine])
 
   // 基于歌词的「这首歌的故事」：歌真正听了约 4s 才生成（跳过的不浪费配额），按 mid 永久缓存复用
   useEffect(() => {
@@ -397,20 +413,20 @@ export default function App() {
         const chorus = lines.filter(l => l.isChorus).map(l => (l.text || '').trim()).filter(Boolean)
         const plain = lines.map(l => (l.text || '').trim()).filter(Boolean)
         const snippet = [...new Set((chorus.length ? chorus : plain).slice(0, 8))].join('\n').slice(0, 240)
-        const story = await generateStory(t, snippet, { likedArtists: likedArtists() })
+        const story = await generateStory(t, snippet)
         if (cancelled || !story) return
         const cache = memoryRef.current.songStories || (memoryRef.current.songStories = {})
         cache[mid] = story
         const keys = Object.keys(cache); if (keys.length > 300) keys.slice(0, keys.length - 300).forEach(k => delete cache[k])
         saveMemory()
-        if (currentTrackRef.current?.mid === mid) {   // 仍在放这首 → 升级成歌词故事（不重复出声）
-          setDjSpeak(false); setAnnouncement(story); setShowAnnouncement(true)
+        if (currentTrackRef.current?.mid === mid) {   // 仍在放这首 → 升级成歌词故事 + 记忆点名（不重复出声）
+          setDjSpeak(false); setAnnouncement(djLine(t, story)); setShowAnnouncement(true)
           setTimeout(() => setShowAnnouncement(false), 8000)
         }
       } catch { /* 配额/失败：保留本地兜底，下次再试 */ }
     }, 4000)
     return () => { cancelled = true; clearTimeout(timer) }
-  }, [currentTrack])
+  }, [currentTrack, djLine])
 
   // 加载并播放单首；地址已在主进程校验过可播，拿不到地址会抛错
   const playTrack = useCallback(async (track) => {
@@ -979,7 +995,7 @@ export default function App() {
             onTogglePlay={togglePlay} onNext={playNext} onLike={likeCurrent} onDislike={dislikeCurrent}
             onVibe={adjustVibe} onSteer={steerRadio} onOpenQueue={() => setShowQueue(true)} onPlayAt={queuePlayAt} onSetVibe={setVibeManual} onShuffleNext={shuffleUpNext} onOpenSearch={() => setShowSearch(true)}
             queueCount={queue.length} nextTrack={queue[0]} upNext={queue} lyric={lyric} moodConfig={moodConfig}
-            story={memoryRef.current.songStories?.[currentTrack.mid] || localStory(currentTrack)}
+            story={djLine(currentTrack, memoryRef.current.songStories?.[currentTrack.mid] || localStory(currentTrack))}
             djName={getPersona()?.name} analyser={analyserRef} volume={volume} onVolume={setUserVolume}
             inFav={favMids.has(currentTrack.mid)}
             onRepick={(rect) => setMoodPopAt(rect)}
