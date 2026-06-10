@@ -40,7 +40,9 @@ export default function DJAnnouncement({ text, visible, speak = true, onDuck }) 
     <div style={{
       ...styles.wrap,
       opacity: visible ? 1 : 0,
-      transform: visible ? 'translateY(0)' : 'translateY(20px)',
+      // 必须保留 translateX(-50%)：内联 transform 会整体覆盖 wrap 里的，丢了就不居中——
+      // 药丸会从窗口中心一路铺到右边缘，恰好压住底部 dock 的音量条（实测踩过）。
+      transform: visible ? 'translateX(-50%) translateY(0)' : 'translateX(-50%) translateY(20px)',
     }}>
       <span style={styles.mic}><Icon name="mic" size={16} color="#c4b5fd" /></span>
       <span style={styles.text}>{text}</span>
@@ -55,6 +57,7 @@ const styles = {
     border: '1px solid rgba(124,58,237,0.45)', borderRadius: 40,   // DJ 紫色身份描边
     padding: '12px 28px', display: 'flex', alignItems: 'center', gap: 10,
     transition: 'opacity .4s, transform .4s', zIndex: 100,
+    pointerEvents: 'none',   // 纯展示：永远别吃鼠标（隐藏时 opacity:0 仍在原地，曾挡住音量条）
     boxShadow: `${glassPill.boxShadow}, 0 0 36px -6px rgba(124,58,237,0.35)`,   // 玻璃高光 + 紫色辉光
     maxWidth: '70vw',
   },
