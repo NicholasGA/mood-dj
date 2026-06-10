@@ -58,6 +58,7 @@ export default function App() {
   const [toast, setToast] = useState('')
   const [update, setUpdate] = useState(null)   // { state, version, percent }
   const [error, setError] = useState('')
+  const [authExpired, setAuthExpired] = useState(false)   // QQ 登录过期：弹"重新登录"横幅（过期=静默取不到播放地址）
   const toastTimer = useRef(null)
   const showToast = useCallback((msg) => {
     setToast(msg)
@@ -167,6 +168,30 @@ export default function App() {
     }
     return () => { cancelled = true }
   }, [qqCookies])
+
+  // 登录态体检：QQ 的 key cookie 只活约 3 天，到期是静默的——app 看着还登录着，
+  // 实际 VIP 歌全取不到地址、收藏同步失败，像"app 坏了"。体检只读本地 cookie（零网络开销），
+  // 启动查一次 + 每小时轮询（app 常驻托盘一跑就是几天，cookie 会在运行中死掉）；
+  // 播放全失败时（playNext 兜底分支）也会再查。过期就弹横幅给重登入口。
+  useEffect(() => {
+    if (!qqCookies) { setAuthExpired(false); return }
+    const check = () => window.electronAPI.checkQQAuth?.().then(r => { if (r && !r.ok) setAuthExpired(true) }).catch(() => {})
+    check()
+    const id = setInterval(check, 60 * 60 * 1000)
+    return () => clearInterval(id)
+  }, [qqCookies])
+
+  // 重新登录：复用首次登录的弹窗流程，成功后无缝继续（不清队列不停歌）
+  const relogin = useCallback(async () => {
+    try {
+      const cookies = await window.electronAPI.initiateQQAuth()
+      await window.electronAPI.storeQQCookies(cookies)
+      setQQCookies(cookies)
+      setAuthExpired(false)
+      setError('')
+      showToast('✅ 已重新登录 QQ音乐')
+    } catch { /* 用户关掉了登录窗口，横幅留着下次再点 */ }
+  }, [])
 
   // 拉取/刷新 QQ 收藏（"我喜欢"等）：更新个性化样本 + 左上角收藏数
   const refreshFavCount = useCallback(() => {
@@ -517,6 +542,10 @@ export default function App() {
       setCurrentTrack(null)
       setIsPlaying(false)
       setError('暂时没找到能播放的歌，换个心情描述试试')
+      // 一首都放不出来，最常见原因是登录过期（取不到任何播放地址）——主动查一次，给重登入口
+      window.electronAPI.checkQQAuth?.().then(r => {
+        if (r && !r.ok) { setAuthExpired(true); setError('QQ 登录已过期，重新登录后就能继续放歌') }
+      }).catch(() => {})
     } finally {
       isAdvancingRef.current = false
       setLoadingTrack(false)
@@ -975,6 +1004,13 @@ export default function App() {
       <LiquidBackground accent={accent} accent2={accent2} track={currentTrack} intensity={currentTrack ? 1 : 0.7} />
 
       {error && <div style={styles.errBanner} onClick={() => setError('')}>⚠️ {error} <span style={{ opacity: .5, fontSize: 11 }}>点击关闭</span></div>}
+
+      {authExpired && (
+        <div style={{ ...styles.updateBanner, top: 84, borderColor: 'rgba(239,68,68,0.55)' }}>
+          🔑 QQ 登录已过期，歌曲会取不到播放地址
+          <button style={{ ...styles.updateBtn, background: '#ef4444' }} onClick={relogin}>重新登录</button>
+        </div>
+      )}
 
       {update && (
         <div style={{ ...styles.updateBanner, borderColor: `${accent}66` }}>

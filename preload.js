@@ -8,6 +8,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   clearQQCookies:      ()         => ipcRenderer.invoke('clear-qq-cookies'),
   getQQUrl:            (songmid, mediaMid) => ipcRenderer.invoke('qq-get-url', songmid, mediaMid),
   getQQLyric:          (songmid) => ipcRenderer.invoke('qq-get-lyric', songmid),
+  checkQQAuth:         () => ipcRenderer.invoke('qq-check-auth'),
   getQQFavorites:      () => ipcRenderer.invoke('qq-get-favorites'),
   getQQPlaylistPage:   (dissid, begin, num) => ipcRenderer.invoke('qq-get-playlist-page', dissid, begin, num),
   getQQFavoriteMids:   () => ipcRenderer.invoke('qq-get-favorite-mids'),

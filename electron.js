@@ -376,6 +376,27 @@ ipcMain.handle('qq-get-favorites', async () => {
   } catch (e) { dlog('[fav] error', e.message); return null }
 })
 
+// ── 登录态体检：QQ 的 key cookie（qm_keyst/qqmusic_key）只活约 3 天，到期被 session 静默丢弃，
+//    而 app 还以为登录着（mooddj-qq.json 还在）→ VIP 歌全部取不到地址、收藏同步悄悄失败。
+//    实测结论：QQ 的读接口全是公开的（歌单/资料/免费歌 vkey 匿名都通），服务端探针测不出过期；
+//    权威信号就是本地 key cookie 的存在与有效期。──
+ipcMain.handle('qq-check-auth', async () => {
+  try {
+    const session = mainWindow.webContents.session
+    const allCookies = await session.cookies.get({})
+    const uin = resolveUin(allCookies)
+    const now = Date.now() / 1000
+    const key = allCookies.find(c => (c.name === 'qm_keyst' || c.name === 'qqmusic_key') && c.value)
+    if (uin === '0' || !key) { dlog('[auth-check] 关键 cookie 缺失，uin:', uin, 'key:', !!key); return { ok: false, reason: 'no-key' } }
+    if (key.expirationDate && key.expirationDate < now) { dlog('[auth-check] key 已过期'); return { ok: false, reason: 'expired' } }
+    const expiresInDays = key.expirationDate ? (key.expirationDate - now) / 86400 : null
+    return { ok: true, expiresInDays }
+  } catch (e) {
+    dlog('[auth-check] error:', e.message)
+    return { ok: true }   // 体检自身出错别误报打扰
+  }
+})
+
 // ── 取某个歌单(我喜欢/自建/收藏的)的一页歌：走主进程，带登录 cookie，能读别人公开歌单。
 //    返回 { tracks, total, hasMore }，渲染层据此渐进加载(先显首页、后台补全)，能读别人公开歌单 ──
 ipcMain.handle('qq-get-playlist-page', async (_e, dissid, begin = 0, num = 100) => {
