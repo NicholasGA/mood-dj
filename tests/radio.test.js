@@ -1,7 +1,22 @@
 import { describe, it, expect } from 'vitest'
-import { capPerArtist, excludeRecent, pushRecent, freshen, removeAt, moveToFront, pushHistory } from '../src/services/radio'
+import { capPerArtist, excludeRecent, pushRecent, freshen, removeAt, moveToFront, pushHistory, buildKnownMids } from '../src/services/radio'
 
 const mk = (mid, artist) => ({ mid, artists: [{ name: artist }] })
+
+describe('buildKnownMids（探索模式的"已知歌"全集：收藏∪最近播放∪本地喜欢）', () => {
+  it('三个来源取并集', () => {
+    const s = buildKnownMids(new Set(['a', 'b']), ['b', 'c'], [{ mid: 'd' }, { mid: 'a' }])
+    expect([...s].sort()).toEqual(['a', 'b', 'c', 'd'])
+  })
+  it('favMids 接受 Set 或数组', () => {
+    expect(buildKnownMids(['x'], [], []).has('x')).toBe(true)
+    expect(buildKnownMids(new Set(['y']), null, undefined).has('y')).toBe(true)
+  })
+  it('空/缺失来源容错；likedTracks 缺 mid 的跳过', () => {
+    expect(buildKnownMids(null, null, null).size).toBe(0)
+    expect(buildKnownMids([], [], [{ name: '无mid' }, null]).size).toBe(0)
+  })
+})
 
 describe('capPerArtist', () => {
   it('每位歌手最多 N 首，保持顺序', () => {

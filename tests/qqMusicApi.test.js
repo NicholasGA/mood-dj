@@ -1,5 +1,39 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { parseLRC, detectChoruses, mapSong, getUin, searchTracks, searchByArtist } from '../src/services/qqMusicApi'
+import { parseLRC, detectChoruses, mapSong, getUin, searchTracks, searchByArtist, canonicalArtist } from '../src/services/qqMusicApi'
+
+describe('canonicalArtist（歌手实锤：搜索结果验明候选词是不是真歌手）', () => {
+  const tr = (name, ...singers) => ({ name, artists: singers.map(n => ({ name: n })) })
+
+  it('singer 名一致的歌够多 → 实锤，返回官方写法', () => {
+    const tracks = [
+      tr('勾指起誓', 'ChiliChill'), tr('在你的身边', 'ChiliChill'),
+      tr('如果可以', 'ChiliChill'), tr('无关', '某路人'),
+    ]
+    expect(canonicalArtist(tracks, 'chilichill')).toBe('ChiliChill')
+  })
+
+  it('忽略大小写与空格归一匹配', () => {
+    const tracks = [tr('a', 'Taylor Swift'), tr('b', 'Taylor Swift'), tr('c', 'Taylor Swift')]
+    expect(canonicalArtist(tracks, 'taylor swift')).toBe('Taylor Swift')
+  })
+
+  it('心情词/曲风词搜出来 singer 五花八门 → 不实锤', () => {
+    const tracks = [tr('chill歌1', '张三'), tr('chill歌2', '李四'), tr('chill歌3', '王五')]
+    expect(canonicalArtist(tracks, 'chill')).toBe(null)
+  })
+
+  it('部分包含不算实锤（chill ≠ ChiliChill，严格相等才行）', () => {
+    const tracks = [tr('a', 'ChiliChill'), tr('b', 'ChiliChill'), tr('c', 'ChiliChill')]
+    expect(canonicalArtist(tracks, 'chill')).toBe(null)
+  })
+
+  it('命中数不足 min → null；空词/空结果 → null', () => {
+    expect(canonicalArtist([tr('a', '周杰伦'), tr('b', '周杰伦')], '周杰伦')).toBe(null)
+    expect(canonicalArtist([tr('a', '周杰伦'), tr('b', '周杰伦')], '周杰伦', 2)).toBe('周杰伦')
+    expect(canonicalArtist([], 'x')).toBe(null)
+    expect(canonicalArtist(null, '')).toBe(null)
+  })
+})
 
 describe('parseLRC', () => {
   it('解析时间戳与文本', () => {

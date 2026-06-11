@@ -46,6 +46,16 @@ export function moveToFront(list, i) {
   return copy
 }
 
+// 探索模式的「已知歌」全集：QQ收藏 ∪ 最近播放 ∪ 本地喜欢。
+// 「想听没听过的歌」要把三个来源都排掉——只排收藏的话，天天放但没收藏的歌照样混进来。
+export function buildKnownMids(favMids, recentMids, likedTracks) {
+  const s = new Set()
+  for (const m of favMids || []) s.add(m)
+  for (const m of recentMids || []) s.add(m)
+  for (const t of likedTracks || []) if (t?.mid) s.add(t.mid)
+  return s
+}
+
 // 播放历史（新→旧，按 mid 去重、封顶）。at 作参数便于测试
 export function pushHistory(list, track, cap = 100, at = Date.now()) {
   if (!track?.mid) return (list || []).slice()

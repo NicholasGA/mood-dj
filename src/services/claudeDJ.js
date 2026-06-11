@@ -183,19 +183,23 @@ export function sanitizeHex(hex, fallback = '#31c27c') {
 // 本地意图解析（不依赖 AI）：识别意图 mode（探索/收藏/普通）+ 剥指令/意图词 + 拆歌手与心情
 export function localInterpret(text) {
   const raw = (text || '').trim()
-  const discover = /没听过|沒聽過|没听|沒聽|新鲜|新鮮|探索|发现|發現|冷门|冷門|小众|小衆|没收藏|沒收藏|宝藏|寶藏|换换口味|不一样|不一樣|陌生|生面孔|新歌手/.test(raw)
-  const favorite = !discover && /(我|自己)的?(收藏|喜欢|喜歡|爱听|愛聽)|收藏(里|裡|夹|夾)|我的歌单|(听过|聽過)的/.test(raw)
+  // 否定式（没有/没怎么/没咋/没太听过、没有收藏）必须进 discover——否则"听过的"会被下面 favorite 误抓成反向意图。
+  // "没.{0,2}听过"覆盖口语变体；"过"不可省（裸"没听"单列）：否则"有没有听起来温柔的歌"会被误判成探索
+  const discover = /没.{0,2}听过|沒.{0,2}聽過|没听|沒聽|从未听|從未聽|新鲜|新鮮|探索|发现|發現|冷门|冷門|小众|小衆|没有?收藏|沒有?收藏|未收藏|宝藏|寶藏|换换口味|不一样|不一樣|陌生|生面孔|新歌手/.test(raw)
+  const favorite = !discover && /(我|自己)的?(收藏|喜欢|喜歡|爱听|愛聽)|收藏(里|裡|夹|夾)|我的歌单|(?<!没有?|沒有?|未|不)(听过|聽過)的/.test(raw)
   // 剥掉 meta 意图词，避免被当成关键词/歌手去搜（"我没听过"绝不该进搜索）
-  const stripMeta = (x) => (x || '').replace(/(我|自己|一些|一点|点儿?|些|首|那种|那些|这种|没听过的?|沒聽過的?|没听|沒聽|新鲜的?|新鮮的?|探索|发现|發現|冷门的?|冷門的?|小众的?|小衆的?|宝藏|寶藏|换换口味|不一样的?|不一樣的?|陌生的?|随便|隨便|收藏(里|裡)?的?|喜欢的?|喜歡的?|爱听的?|愛聽的?|听过的?|聽過的?)/g, '').trim()
+  const stripMeta = (x) => (x || '').replace(/(我|自己|一些|一点|点儿?|些|首|那种|那些|这种|没.{0,2}听过的?|沒.{0,2}聽過的?|没听|沒聽|新鲜的?|新鮮的?|探索|发现|發現|冷门的?|冷門的?|小众的?|小衆的?|宝藏|寶藏|换换口味|不一样的?|不一樣的?|陌生的?|随便|隨便|没有?收藏过?的?|沒有?收藏过?的?|收藏(里|裡)?的?|喜欢的?|喜歡的?|爱听的?|愛聽的?|听过的?|聽過的?)/g, '').trim()
   let s = raw
-    .replace(/^(请|帮我|给我|我想听|我要听|我想|我要|想听|来听|放点|来点|听点|放首|来首|来个|换成|换点|整点|放|听|想|要)+/g, '')
+    .replace(/^(请|帮我|给我|我想听|我要听|我想|我要|想听|来听|放点|来点|听点|放首|来首|来个|换成|换点|整点|一下|放|听|想|要)+/g, '')
     .replace(/(的歌曲?|的音乐|的曲子?|的|吧|嘛|啊|呗|哦|喔|呀)+$/g, '').trim()
   let artist = s, mood = ''
   const conj = s.match(/^(.+?)(但是?|不过|还要|要|换成)\s*(.+)$/)
   if (conj) { artist = conj[1].trim(); mood = conj[3] }
   artist = stripMeta(artist.replace(/(的|点)+$/g, '').trim())
   mood = stripMeta((mood || '').replace(/(的|点)+$/g, '').trim())
-  const artists = (artist && artist.length <= 10 && !/[，,\s]/.test(artist)) ? [artist] : []
+  // 纯拉丁名允许空格且放宽长度（Taylor Swift / chilichill）；中文名维持"短且无分隔"启发式
+  const latin = /^[A-Za-z0-9 .&'-]+$/.test(artist)
+  const artists = (artist && (latin ? artist.length <= 20 : (artist.length <= 10 && !/[，,\s]/.test(artist)))) ? [artist] : []
   let keywords = (mood ? [mood] : (artist ? [artist] : [])).filter(Boolean)
   if (!keywords.length) keywords = discover ? ['小众 华语', '宝藏 冷门', '好听 新发现'] : (favorite || !raw) ? [] : [raw]
   const mode = discover ? 'discover' : favorite ? 'favorite' : 'normal'
@@ -214,20 +218,33 @@ export async function interpretRequest(text, taste = {}) {
 用户说："${text}"${tasteHint}
 解析意图，返回JSON：
 {
-  "mode": "discover=想听没听过/新鲜/探索/冷门小众的；favorite=想听自己收藏/喜欢的；normal=其它",
-  "artists": ["点名的歌手原名(没有就空数组)"],
-  "keywords": ["真正能在音乐App搜到歌的曲风/场景/语种词，2-4个。绝不要把'没听过/探索/随便/我收藏的'这类意图词当关键词！discover 时给出贴合口味又能挖到新东西的方向词"],
+  "mode": "discover | favorite | normal",
+  "artists": ["点名的歌手"],
+  "keywords": ["搜索词，0-3个"],
   "mood_name": "4-6字概括",
   "dj_intro": "≤25字DJ口吻回应，呼应这句话"
-}`, { maxTokens: 440, temperature: 0.6 })
+}
+判定规则：
+- mode：想听没听过/没收藏过/新鲜/冷门/陌生的→discover；想听自己收藏/喜欢过/常听的→favorite；其余→normal。注意否定词："没收藏过的""没有听过的"是 discover 不是 favorite。
+- artists：「想听X的歌/来点X/放X」里的 X 像名字（含英文、拼音、生造词）就填进 artists——小众歌手你多半不认识，宁可当歌手名也别猜成曲风或心情；认识的写官方原名。
+- keywords：能在音乐App搜出歌的曲风/场景/语种词。绝不要把"没听过/探索/随便/收藏"这类意图词当关键词，也别重复 artists 里的名字。只点名歌手、没提其它要求时给空数组。
+示例：
+"我想听chilichill的歌"→{"mode":"normal","artists":["chilichill"],"keywords":[]}
+"来点周杰伦 安静一点的"→{"mode":"normal","artists":["周杰伦"],"keywords":["安静","钢琴"]}
+"想听没收藏过的歌"→{"mode":"discover","artists":[],"keywords":["小众宝藏","冷门佳作"]}
+"放我收藏里的歌"→{"mode":"favorite","artists":[],"keywords":[]}`, { maxTokens: 440, temperature: 0.6 })
     const m = raw.match(/\{[\s\S]*\}/)
     if (!m) throw new Error('no json')
     const j = JSON.parse(m[0])
     const local = localInterpret(text)
+    // 先洗再判空：模型偶发 [""]/[null] 会让 length 判断误以为"有结果"而绕过本地兜底
+    const aiArtists = (Array.isArray(j.artists) ? j.artists : []).map(x => String(x || '').trim()).filter(Boolean)
+    const aiKeywords = (Array.isArray(j.keywords) ? j.keywords : []).map(x => String(x || '').trim()).filter(Boolean)
     return {
       mode: ['discover', 'favorite', 'normal'].includes(j.mode) ? j.mode : local.mode,
-      artists: Array.isArray(j.artists) && j.artists.length ? j.artists.filter(Boolean) : local.artists,
-      keywords: Array.isArray(j.keywords) && j.keywords.length ? j.keywords.filter(Boolean) : local.keywords,
+      artists: aiArtists.length ? aiArtists : local.artists,
+      // AI 点名了歌手且没给词 → 尊重"只点歌手"的空数组；AI 全空才回退本地
+      keywords: aiKeywords.length ? aiKeywords : (aiArtists.length ? [] : local.keywords),
       mood_name: j.mood_name || local.mood_name,
       dj_intro: j.dj_intro || local.dj_intro,
     }
@@ -243,10 +260,15 @@ export async function recommendSongs(request, taste = {}, opts = {}) {
   const n = opts.n || 14
   const tasteLine = (taste.genres?.length || taste.artists?.length)
     ? `听众口味：曲风[${(taste.genres || []).slice(0, 5).join('、')}] 常听[${(taste.artists || []).slice(0, 8).join('、')}]。推荐时贴合但不要全是这些歌手本人。\n` : ''
+  // 探索模式带上"已听清单"：LLM 不知道用户听过什么，不喂这个它推的"冷门"还是会撞上熟歌
+  const avoidLine = opts.avoid?.length
+    ? `他最近已经听过这些，绝不要再推荐：${opts.avoid.slice(0, 30).join('；')}\n` : ''
+  const discoverLine = opts.discover
+    ? `重点挑听众多半没听过的冷门宝藏/小众佳作，避开大热口水歌${taste.artists?.length ? '，也避开他常听歌手本人的歌（找同气质的新面孔）' : ''}。` : ''
   const system = withPersona(`你是资深歌单编辑/乐评人，熟悉各国曲风、年代、冷门宝藏。只输出JSON数组，不要任何解释。`)
   const raw = await gemini(system, `
 需求/心情："${request}"
-${tasteLine}像优质歌单/乐评人那样，推荐 ${n} 首真实存在、契合上面需求与口味的具体歌曲——注重品味与契合度，宁缺毋滥，可跨语种、有层次。${opts.discover ? '重点挑听众多半没听过的冷门宝藏/小众佳作，避开大热口水歌。' : ''}
+${tasteLine}${avoidLine}像优质歌单/乐评人那样，推荐 ${n} 首真实存在、契合上面需求与口味的具体歌曲——注重品味与契合度，宁缺毋滥，可跨语种、有层次。${discoverLine}
 只返回JSON数组：[{"name":"准确歌名","artist":"主要歌手"}, …]`, { maxTokens: 800, temperature: 0.9 })
   const m = raw.match(/\[[\s\S]*\]/)
   if (!m) throw new Error('recommend failed')

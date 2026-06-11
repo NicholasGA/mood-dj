@@ -71,6 +71,51 @@ describe('localInterpret（AI 不可用时的本地点歌解析）', () => {
   it('普通点歌 → mode 为 normal', () => {
     expect(localInterpret('放点周杰伦的').mode).toBe('normal')
   })
+
+  // 否定式回归（曾被"听过的"误抓成 favorite——正好反了）
+  it('"我想听没有听过的歌" → discover，绝不是 favorite', () => {
+    const r = localInterpret('我想听没有听过的歌')
+    expect(r.mode).toBe('discover')
+    expect(r.artists).toEqual([])
+  })
+
+  it('"我想听没收藏过的歌" / "没有收藏过的" → discover', () => {
+    expect(localInterpret('我想听没收藏过的歌').mode).toBe('discover')
+    expect(localInterpret('放点没有收藏过的').mode).toBe('discover')
+  })
+
+  it('"放点我没怎么听过的" → discover', () => {
+    const r = localInterpret('放点我没怎么听过的')
+    expect(r.mode).toBe('discover')
+    expect(r.keywords.join('')).not.toContain('听过')
+  })
+
+  it('口语变体"没咋/没太/没啥听过" → 都是 discover（曾被误抓成 favorite）', () => {
+    for (const t of ['想听没咋听过的歌', '没太听过的', '来点我没啥听过的']) {
+      const r = localInterpret(t)
+      expect(r.mode, t).toBe('discover')
+      expect(r.keywords.join(''), t).not.toContain('听过')
+    }
+  })
+
+  it('"想听听过的歌" → 还是 favorite（否定守卫别误伤肯定式）', () => {
+    expect(localInterpret('想听听过的歌').mode).toBe('favorite')
+  })
+
+  it('"有没有听起来温柔一点的歌" → normal（"没有听"不带"过"不算探索）', () => {
+    expect(localInterpret('有没有听起来温柔一点的歌').mode).toBe('normal')
+  })
+
+  // 拉丁字母歌手名（chilichill 曾被 AI 当成 chill 心情）
+  it('"我想听chilichill的歌" → 识别为歌手', () => {
+    const r = localInterpret('我想听chilichill的歌')
+    expect(r.mode).toBe('normal')
+    expect(r.artists).toEqual(['chilichill'])
+  })
+
+  it('英文名带空格（Taylor Swift）→ 允许当单一歌手', () => {
+    expect(localInterpret('来点Taylor Swift的歌').artists).toEqual(['Taylor Swift'])
+  })
 })
 
 describe('configureLLM / hasLLMKey', () => {

@@ -24,7 +24,7 @@ export function mapSong(s) {
     mid: s.mid,
     media_mid: s.file?.media_mid || s.mid,  // 取流文件名要用 media_mid，不是 mid
     name: s.name || s.songname,
-    artists: (s.singer || []).map(a => ({ name: a.name })),
+    artists: (s.singer || []).map(a => ({ name: a.name, mid: a.mid })),
     album: {
       name: s.album?.name,
       images: s.album?.mid ? [{ url: `https://y.gtimg.cn/music/photo_new/T002R300x300M000${s.album.mid}.jpg` }] : [],
@@ -53,6 +53,21 @@ export async function searchTracks(cookies, query, limit = 20, page = 1) {
     param: { search_type: 0, query, page_num: page, num_per_page: limit, grp: 1 },
   })
   return (data?.body?.song?.list || []).map(mapSong).filter(Boolean)
+}
+
+// ── 歌手实锤（纯函数，可单测）：搜索结果里 singer 名与候选词（忽略大小写/空格）完全一致的
+// 歌够多 → 这是个真歌手，返回官方写法的名字；否则 null。给"点名歌手"探针用：
+// AI 不认识的小众歌手（如 chilichill）、本地启发式猜出来的词，都先拿 QQ 的数据验明正身。
+export function canonicalArtist(tracks, term, min = 3) {
+  const norm = (s) => (s || '').toLowerCase().replace(/\s/g, '')
+  const want = norm(term)
+  if (!want) return null
+  const count = {}
+  for (const t of tracks || []) for (const a of t?.artists || []) {
+    if (norm(a.name) === want) count[a.name] = (count[a.name] || 0) + 1
+  }
+  const best = Object.entries(count).sort((a, b) => b[1] - a[1])[0]
+  return best && best[1] >= min ? best[0] : null
 }
 
 // ── 按歌手搜：搜歌手名后用 singer 字段过滤，剔除"标题里含该词"的杂歌 ──
