@@ -102,31 +102,54 @@ export default function LightStrip() {
     return () => { cancelAnimationFrame(raf); window.removeEventListener('resize', resize) }
   }, [])
 
-  // 胶囊内容尺寸 → 同步给 goo 层里的"胶囊皮"（皮在滤镜里才有粘连，内容在滤镜外保持锐利）
-  const capRef = useRef(null)
-  const [capSize, setCapSize] = useState({ w: 220, h: 42 })
+  // 内容自然宽度 → 容器宽度走 CSS 过渡：歌词长短变化时胶囊"液体拉伸"而不是跳变
+  const rowRef = useRef(null)
+  const [natural, setNatural] = useState({ w: 200, h: 26 })
   useEffect(() => {
-    const el = capRef.current
+    const el = rowRef.current
     if (!el || typeof ResizeObserver === 'undefined') return
-    const ro = new ResizeObserver(() => setCapSize({ w: el.offsetWidth, h: el.offsetHeight }))
+    const ro = new ResizeObserver(() => setNatural({ w: el.offsetWidth, h: el.offsetHeight }))
     ro.observe(el)
     return () => ro.disconnect()
   }, [])
 
+  // 相位机：破水(rising)/自由悬浮(afloat)/溅落(sinking)/沉底(closed)。
+  // 连接元素（水丘/液颈/液滴）只在 rising/sinking 出现——浮稳后液颈断开、胶囊自由漂，
+  // 不再一直和液池粘着；沉回时重新接上，有"溅落"的呼应。
+  const [phase, setPhase] = useState('closed')
+  useEffect(() => {
+    if (open) {
+      setPhase('rising')
+      const t = setTimeout(() => setPhase('afloat'), 680)
+      return () => clearTimeout(t)
+    }
+    setPhase(p => (p === 'closed' ? 'closed' : 'sinking'))
+    const t = setTimeout(() => setPhase('closed'), 520)
+    return () => clearTimeout(t)
+  }, [open])
+
   const cmd = (c) => window.electronAPI?.stripCmd?.(c)
   const a = track.accent
   const text = line || (track.name ? `${track.name} · ${track.artist}` : 'Mood DJ')
-  // 浮出/沉回：浮出带弹性过冲（液滴破水），沉回先加速再吸入
+  const connected = phase === 'rising' || phase === 'sinking'
+  const floating = phase === 'afloat'
+  const W = Math.min(560, natural.w + 28), H = natural.h + 16   // 容器 = 内容 + padding(14/8)，夹上限保持居中
+  const moundW = Math.round(W * 1.25)                   // 水丘跟着胶囊宽度走
+  // 浮出带弹性过冲（液滴破水），沉回先加速再吸入
   const rise = open ? 'translateY(0)' : 'translateY(96px)'
   const spring = open ? 'transform .6s cubic-bezier(.34,1.6,.64,1)' : 'transform .42s cubic-bezier(.55,-.15,.75,.35)'
+  const widthT = 'width .5s cubic-bezier(.3,1.3,.45,1), margin-left .5s cubic-bezier(.3,1.3,.45,1)'
+  // 连接元素：rising/sinking 跟着升降；afloat 时缩回光带（goo 下有"液颈拉断"的瞬间）
+  const subRise = (open && connected) ? 'translateY(0)' : 'translateY(96px)'
+  const subT = connected ? `${spring}, opacity .25s ease` : 'transform .35s ease-in, opacity .3s ease'
   const skinColor = `color-mix(in srgb, ${a} 26%, #0b0d13)`   // 胶囊皮：accent 调进深色，跟光带同族
 
   return (
     <div style={s.wrap}>
       <canvas ref={canvasRef} style={s.canvas} />
 
-      {/* goo 液体层：液面 + 胶囊皮 + 液颈 + 液滴，全在滤镜里 → 形状真正粘成一体。
-          胶囊皮和液颈是关键：皮=胶囊在液体世界的身体，颈=浮起后仍连着光带的"液桥"。 */}
+      {/* goo 液体层：水丘 + 胶囊皮 + 液颈 + 液滴全在滤镜里 → 形状真正粘成一体。
+          皮=胶囊在液体世界的身体；颈/滴只在升降的瞬间出现，浮稳后断开。 */}
       <svg width="0" height="0" style={{ position: 'absolute' }} aria-hidden>
         <defs>
           <filter id="goo">
@@ -136,34 +159,35 @@ export default function LightStrip() {
         </defs>
       </svg>
       <div style={{ ...s.gooLayer, filter: 'url(#goo)', opacity: playing || open ? 1 : 0 }} aria-hidden>
-        {/* 水丘：只在胶囊浮出时隆起（平时光带保持干净的 3px 线，不留突兀的常驻色块） */}
-        <div style={{ ...s.surface, background: a, opacity: open ? 0.95 : 0, transform: `scaleY(${open ? 1 + level * 0.5 : 0.12})` }} />
+        <div style={{ ...s.surface, width: moundW, marginLeft: -moundW / 2, background: a, opacity: connected ? 0.95 : 0, transform: `scaleY(${connected ? 1 + level * 0.5 : 0.12})`, transition: `${s.surface.transition}, ${widthT}` }} />
         <div
-          className={open && playing ? 'cap-blob' : ''}
+          className={floating && playing ? 'cap-skin-live' : ''}
           style={{
-            ...s.skin, width: capSize.w, height: capSize.h, marginLeft: -capSize.w / 2,
-            borderRadius: capSize.h / 2, background: skinColor, transform: rise, transition: spring,
+            ...s.skin, width: W, height: H, marginLeft: -W / 2,
+            borderRadius: H / 2, background: skinColor, transform: rise, transition: `${spring}, ${widthT}`,
           }}
         />
-        <div style={{ ...s.neck, background: a, transform: rise, transition: `${spring}, opacity .3s`, transitionDelay: '60ms', opacity: open ? 0.95 : 0.5 }} />
-        <div style={{ ...s.drop, width: 10, height: 10, marginLeft: -30, background: a, transform: rise, transition: spring, transitionDelay: '110ms' }} />
-        <div style={{ ...s.drop, width: 7, height: 7, marginLeft: 26, background: a, transform: rise, transition: spring, transitionDelay: '170ms' }} />
+        <div style={{ ...s.neck, background: a, transform: subRise, transition: subT, transitionDelay: connected ? '60ms' : '0ms', opacity: connected ? 0.95 : 0 }} />
+        <div style={{ ...s.drop, width: 10, height: 10, marginLeft: -30, background: a, transform: subRise, transition: subT, transitionDelay: '110ms', opacity: connected ? 1 : 0 }} />
+        <div style={{ ...s.drop, width: 7, height: 7, marginLeft: 26, background: a, transform: subRise, transition: subT, transitionDelay: '170ms', opacity: connected ? 1 : 0 }} />
       </div>
 
-      {/* 胶囊内容（滤镜外，文字锐利）：无底色无边框，身体由 goo 层的皮提供 → 不再是两个图层 */}
-      <div ref={capRef} style={{ ...s.capsule, transform: rise, transition: spring }}>
-        {track.cover
-          ? <img src={track.cover} alt="" style={{ ...s.cover, animation: playing ? 'spin 12s linear infinite' : 'none' }} draggable={false} />
-          : <span style={{ ...s.dot, background: a }} />}
-        <span style={s.lyric} title={text}>{text}</span>
-        <Eq level={level} accent={a} playing={playing} />
-        {hover && (
-          <span style={s.ctrls}>
-            <button style={s.btn} onClick={() => cmd('toggle')} title="播放/暂停">{playing ? '⏸' : '▶'}</button>
-            <button style={s.btn} onClick={() => cmd('next')} title="下一首">⏭</button>
-            <button style={s.btn} onClick={() => cmd('show-main')} title="退出灯带，回大窗">⤢</button>
-          </span>
-        )}
+      {/* 胶囊内容（滤镜外，文字锐利）：宽度与皮同步液体拉伸；浮稳后随 cap-bob 轻微漂浮 */}
+      <div className={floating ? 'cap-bob' : ''} style={{ ...s.capsule, width: W, marginLeft: -W / 2, transform: rise, transition: `${spring}, ${widthT}` }}>
+        <div ref={rowRef} style={s.capRow}>
+          {track.cover
+            ? <img src={track.cover} alt="" style={{ ...s.cover, animation: playing ? 'spin 12s linear infinite' : 'none' }} draggable={false} />
+            : <span style={{ ...s.dot, background: a }} />}
+          <span key={text} className="cap-lyric-in" style={s.lyric} title={text}>{text}</span>
+          <Eq level={level} accent={a} playing={playing} />
+          {hover && (
+            <span style={s.ctrls}>
+              <button style={s.btn} onClick={() => cmd('toggle')} title="播放/暂停">{playing ? '⏸' : '▶'}</button>
+              <button style={s.btn} onClick={() => cmd('next')} title="下一首">⏭</button>
+              <button style={s.btn} onClick={() => cmd('show-main')} title="退出灯带，回大窗">⤢</button>
+            </span>
+          )}
+        </div>
       </div>
     </div>
   )
@@ -212,13 +236,15 @@ const s = {
   },
   drop: { position: 'absolute', bottom: 4, left: '50%', borderRadius: '50%' },
 
-  // 胶囊内容（清晰层）：无底无框，身体由 goo 层的"皮"提供
+  // 胶囊内容（清晰层）：无底无框，身体由 goo 层的"皮"提供；
+  // 宽度由测量驱动 + CSS 过渡（液体拉伸），居中用 marginLeft（translate 留给漂浮动画）
   capsule: {
-    position: 'absolute', bottom: 17, left: '50%', translate: '-50% 0',
-    pointerEvents: 'auto', display: 'flex', alignItems: 'center', gap: 10,
-    maxWidth: 540, padding: '8px 14px',
+    position: 'absolute', bottom: 17, left: '50%', boxSizing: 'border-box',
+    pointerEvents: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'center',
+    overflow: 'hidden', maxWidth: 560, padding: '8px 14px',
     color: '#eef0f5', whiteSpace: 'nowrap', textShadow: '0 1px 5px rgba(0,0,0,0.65)',
   },
+  capRow: { display: 'flex', alignItems: 'center', gap: 10, whiteSpace: 'nowrap', width: 'max-content' },
   cover: { width: 26, height: 26, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 },
   dot: { width: 10, height: 10, borderRadius: '50%', flexShrink: 0 },
   lyric: { fontSize: 13, lineHeight: 1.4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 360 },
