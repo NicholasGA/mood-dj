@@ -157,9 +157,13 @@ input:focus, textarea:focus {
 @keyframes dockPanelIn { from { opacity: 0; transform: scale(.72); } to { opacity: 1; transform: scale(1); } }
 .dock-panel-in { animation: dockPanelIn .26s cubic-bezier(.22,.61,.36,1) both; }
 
-/* 灯带模式 · 顶边胶囊弹出：从微光线位置轻轻坠入 */
-@keyframes capIn { from { opacity: 0; transform: translateY(-10px) scale(.9); } to { opacity: 1; transform: translateY(0) scale(1); } }
-.cap-in { animation: capIn .24s cubic-bezier(.22,.61,.36,1) both; }
+/* 灯带模式 · 胶囊的液体感形变：圆角缓慢游移，像表面张力在呼吸（只动 border-radius，元素小、开销可忽略） */
+@keyframes capBlob {
+  0%, 100% { border-radius: 21px 23px 20px 24px / 24px 20px 23px 21px; }
+  33%      { border-radius: 24px 19px 23px 20px / 20px 24px 19px 23px; }
+  66%      { border-radius: 20px 24px 21px 23px / 23px 21px 24px 20px; }
+}
+.cap-blob { animation: capBlob 5.5s ease-in-out infinite; }
 
 /* 呼吸感：极缓的明暗+缩放脉动，周期由 --breath 控制（能量越高越快）。
    只动 opacity/transform，GPU 友好；prefers-reduced-motion 下停掉。 */
