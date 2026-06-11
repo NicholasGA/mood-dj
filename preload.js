@@ -34,4 +34,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   setDock:    (on) => ipcRenderer.invoke('set-dock', on),
   dockExpand: (expand) => ipcRenderer.invoke('dock-expand', expand),
   dockMove:   (dx, dy) => ipcRenderer.invoke('dock-move', dx, dy),
+  // 灯带模式：主窗推频谱/歌词流，灯带/胶囊小窗收流；胶囊回传控制指令
+  setStrip:      (on) => ipcRenderer.invoke('set-strip', on),
+  sendStripData: (d)  => ipcRenderer.send('strip-data', d),
+  onStripData:   (cb) => ipcRenderer.on('strip-data', (_e, d) => cb(d)),
+  onStripHover:  (cb) => ipcRenderer.on('strip-hover', (_e, v) => cb(v)),
+  stripCmd:      (c)  => ipcRenderer.send('strip-cmd', c),
+  onStripCmd:    (cb) => ipcRenderer.on('strip-cmd', (_e, c) => cb(c)),
 })

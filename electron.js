@@ -31,6 +31,9 @@ protocol.registerSchemesAsPrivileged([
 const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.woff2': 'font/woff2', '.woff': 'font/woff', '.ttf': 'font/ttf', '.ico': 'image/x-icon' }
 
 const isDev = process.env.ELECTRON_DEV === 'true'
+// dev 活体调试钩子：dev 主进程经 ESM 加载，inspector 注入后拿不到 require/mainModule，
+// 从 global 透出 electron 引用（正式包不暴露）。用法见记忆 live-debug-installed-app。
+if (isDev) global.__dev = { electron: require('electron') }
 let mainWindow
 let tray = null
 let isQuitting = false   // 只有从托盘「退出」或系统退出时才真退；点 ✕ 只收进托盘
@@ -649,5 +652,95 @@ ipcMain.handle('dock-move', (_e, dx, dy) => {
   try { const b = mainWindow.getBounds(); mainWindow.setBounds(clampToWorkArea({ ...b, x: b.x + dx, y: b.y + dy })) } catch {}
 })
 
+// ── 灯带模式：底边任务栏灯带（律动）+ 顶边灵动胶囊（歌词）──────────────────
+// 主窗隐藏继续放歌；两个透明置顶小窗默认全程鼠标穿透（绝不挡操作），
+// 光标轮询发现悬停在胶囊上时才临时接管鼠标（显示控制按钮）。
+// 数据流：主窗渲染层 30fps 推频谱/歌词（strip-data）→ 主进程转发给两个小窗。
+let stripWin = null, capsuleWin = null, stripPoll = null, stripOn = false
+const STRIP_H = 64                  // 灯带窗高：3px 光带 + 频谱波峰的余量（其余全透明）
+const CAP_W = 560, CAP_H = 84       // 胶囊窗：固定尺寸，展开/收起全靠 CSS（不改窗，避免 Win 透明窗重绘坑）
+
+function stripUrl(hash) {
+  return isDev ? `http://localhost:5173/#${hash}` : `app://bundle/index.html#${hash}`
+}
+function makeOverlayWin(width, height) {
+  const w = new BrowserWindow({
+    width, height, frame: false, transparent: true, resizable: false, movable: false,
+    skipTaskbar: true, focusable: false, show: false, hasShadow: false,
+    backgroundColor: '#00000000',
+    webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, webSecurity: false },
+  })
+  w.setAlwaysOnTop(true, 'floating')
+  w.setIgnoreMouseEvents(true)      // 默认穿透：灯带永远穿透，胶囊仅悬停时接管
+  return w
+}
+function layoutStripWins() {
+  if (!stripWin || stripWin.isDestroyed()) return
+  const wa = screen.getPrimaryDisplay().workArea
+  stripWin.setBounds({ x: wa.x, y: wa.y + wa.height - STRIP_H, width: wa.width, height: STRIP_H })
+  capsuleWin.setBounds({ x: wa.x + Math.round((wa.width - CAP_W) / 2), y: wa.y, width: CAP_W, height: CAP_H })
+}
+function stopStrip({ showMain = true } = {}) {
+  stripOn = false
+  if (stripPoll) { clearInterval(stripPoll); stripPoll = null }
+  for (const w of [stripWin, capsuleWin]) { try { w && !w.isDestroyed() && w.hide() } catch {} }
+  try { mainWindow?.webContents.send('strip-cmd', 'exited') } catch {}   // 同步渲染层 React 状态
+  if (showMain && mainWindow) { mainWindow.show(); mainWindow.focus() }
+  dlog('[strip] OFF')
+}
+ipcMain.handle('set-strip', (_e, on) => {
+  try {
+    if (!on) { stopStrip({ showMain: true }); return true }
+    if (!stripWin || stripWin.isDestroyed()) {
+      stripWin = makeOverlayWin(800, STRIP_H)
+      capsuleWin = makeOverlayWin(CAP_W, CAP_H)
+      stripWin.loadURL(stripUrl('strip'))
+      capsuleWin.loadURL(stripUrl('capsule'))
+      for (const w of [stripWin, capsuleWin]) w.on('closed', () => { stripWin = null; capsuleWin = null })
+      // 分辨率/任务栏变化时重排（screen 模块必须 app ready 后才能用，所以挂在这里）
+      if (!global.__stripScreenHook) {
+        global.__stripScreenHook = true
+        screen.on('display-metrics-changed', () => { if (stripOn) layoutStripWins() })
+      }
+    }
+    layoutStripWins()
+    stripWin.showInactive(); capsuleWin.showInactive()
+    stripOn = true
+    mainWindow?.hide()
+    // 托盘/任务栏唤回主窗 → 自动退出灯带（避免双形态并存）。只挂一次。
+    if (mainWindow && !mainWindow.__stripShowHook) {
+      mainWindow.__stripShowHook = true
+      mainWindow.on('show', () => { if (stripOn) stopStrip({ showMain: false }) })
+    }
+    // 光标轮询（8Hz，仅灯带模式期间）：悬停胶囊 → 接管鼠标显示控件；离开 → 还回穿透
+    let hovering = false
+    if (stripPoll) clearInterval(stripPoll)
+    stripPoll = setInterval(() => {
+      try {
+        if (!capsuleWin || capsuleWin.isDestroyed()) return
+        const p = screen.getCursorScreenPoint()
+        const b = capsuleWin.getBounds()
+        const inside = p.x >= b.x && p.x <= b.x + b.width && p.y >= b.y && p.y <= b.y + b.height
+        if (inside !== hovering) {
+          hovering = inside
+          capsuleWin.setIgnoreMouseEvents(!inside)
+          capsuleWin.webContents.send('strip-hover', inside)
+        }
+      } catch {}
+    }, 125)
+    dlog('[strip] ON')
+    return true
+  } catch (e) { dlog('[strip] error', e.message); return false }
+})
+// 主窗渲染层的频谱/歌词流 → 转发两个小窗
+ipcMain.on('strip-data', (_e, data) => {
+  if (!stripOn) return
+  for (const w of [stripWin, capsuleWin]) { try { w && !w.isDestroyed() && w.webContents.send('strip-data', data) } catch {} }
+})
+// 胶囊上的控制按钮 → 转给主窗执行（播放/下一首）；show-main = 退出灯带回大窗
+ipcMain.on('strip-cmd', (_e, cmd) => {
+  if (cmd === 'show-main') { stopStrip({ showMain: true }); return }
+  try { mainWindow?.webContents.send('strip-cmd', cmd) } catch {}
+})
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit() })
 app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow() })

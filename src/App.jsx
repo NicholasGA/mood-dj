@@ -37,6 +37,9 @@ export default function App() {
   const [miniMode, setMiniMode] = useState(false)
   const [dockMode, setDockMode] = useState(false)        // 壁龛模式：可拖动的悬浮唱片球
   const [dockExpanded, setDockExpanded] = useState(false)
+  const [stripMode, setStripMode] = useState(false)      // 灯带模式：底边律动灯带 + 顶边歌词胶囊
+  const stripFnsRef = useRef({})                         // 胶囊指令的最新闭包（监听只挂一次）
+  const stripLineRef = useRef(-1)                        // 已推送的歌词行号（变化才发）
   const [favCount, setFavCount] = useState(0)   // 已接入的 QQ收藏数（仅用于 UI 提示）
   const [favPlaylists, setFavPlaylists] = useState([])   // 我的歌单（我喜欢 + 自建 + 收藏的）供"找歌·我的收藏"浏览
   const [likedCount, setLikedCount] = useState(0)   // 本地喜欢数量（喂口味，不再单独展示面板）
@@ -753,6 +756,64 @@ export default function App() {
     window.electronAPI.dockExpand?.(expand)
   }
 
+  // ── 灯带模式：主窗收进托盘继续放歌，底边灯带（律动）+ 顶边胶囊（歌词）接管桌面 ──
+  function toggleStrip(on) {
+    window.electronAPI.setStrip?.(on)
+    setStripMode(on)
+  }
+  // 胶囊控制键 → 主窗执行（用 ref 拿最新闭包，监听只挂一次）
+  stripFnsRef.current = { togglePlay, playNext, exited: () => setStripMode(false) }
+  useEffect(() => {
+    window.electronAPI.onStripCmd?.((c) => {
+      const f = stripFnsRef.current
+      if (c === 'toggle') f.togglePlay?.()
+      else if (c === 'next') f.playNext?.()
+      else if (c === 'exited') f.exited?.()
+    })
+  }, [])
+  // 数据流：30fps 推频谱帧 + 歌词行变化 + 曲目信息（仅灯带模式开启时）
+  useEffect(() => {
+    if (!stripMode) return
+    ensureAnalyser()
+    const send = (d) => window.electronAPI.sendStripData?.(d)
+    const accent = albumColors?.primary || moodConfigRef.current?.color_primary || '#31c27c'
+    const accent2 = albumColors?.secondary || moodConfigRef.current?.color_secondary || '#1db954'
+    const cur = currentTrackRef.current
+    send({ t: 'track', name: cur?.name || '', artist: (cur?.artists || []).map(a => a.name).join(' / '), cover: cur?.album?.images?.[0]?.url || '', accent, accent2 })
+    stripLineRef.current = -1
+    const buf = new Uint8Array(analyserRef.current?.frequencyBinCount || 1024)
+    const zero = new Array(20).fill(0)
+    const id = setInterval(() => {
+      const a = analyserRef.current, audio = audioRef.current
+      const playing = !!(audio && !audio.paused && audio.src)
+      let bands = zero, level = 0
+      if (a && playing) {
+        a.getByteFrequencyData(buf)
+        bands = []
+        const n = 20, span = Math.max(1, Math.floor(buf.length / 2 / n))   // 高半频段基本无能量，只取下半
+        for (let i = 0; i < n; i++) {
+          let s = 0
+          for (let j = 0; j < span; j++) s += buf[i * span + j]
+          bands.push(Math.round((s / span / 255) * 100) / 100)
+        }
+        level = Math.round(((bands[0] + bands[1] + bands[2] + bands[3]) / 4) * 100) / 100
+      }
+      send({ t: 'frame', bands, level, playing })
+      // 歌词行变化才发一条（胶囊据此弹出）
+      const lines = lyric?.lines || []
+      if (lines.length && audio) {
+        let idx = -1
+        for (let i = 0; i < lines.length; i++) { if (lines[i].time <= audio.currentTime) idx = i; else break }
+        if (idx !== stripLineRef.current) {
+          stripLineRef.current = idx
+          const ln = lines[idx]
+          if (ln?.text) send({ t: 'lyric', line: ln.text, trans: ln.trans || '', isChorus: !!ln.isChorus })
+        }
+      }
+    }, 33)
+    return () => clearInterval(id)
+  }, [stripMode, currentTrack, lyric, albumColors, ensureAnalyser])
+
   // 播放中实时调味：把新 vibe 的歌插到队首，立即生效（不重开台、不耗 Gemini）
   const VIBE = {
     up:     { key: '燃 快节奏 嗨曲 高能', dE: 0.22, pl: '运动 健身 燃歌', toast: '🔥 更带劲了' },
@@ -1057,6 +1118,7 @@ export default function App() {
             {sleepMin ? <span style={{ fontSize: 10 }}>{sleepLeft || `${sleepMin}m`}</span> : null}
           </button>
           <button style={styles.wBtn} onClick={() => setShowSetup(true)} title="设置 / API Key"><Icon name="settings" size={15} color="#9ca3af" /></button>
+          <button style={styles.wBtn} onClick={() => toggleStrip(true)} title="灯带模式（底边律动灯带 + 顶边歌词胶囊，主窗收进托盘；点托盘图标或胶囊上的 ⤢ 回大窗）"><Icon name="sparkles" size={14} color="#9ca3af" /></button>
           <button style={styles.wBtn} onClick={() => toggleDock(true)} title="壁龛模式（贴右边缘的常驻小条，hover 展开）"><Icon name="dock" size={14} color="#9ca3af" /></button>
           <button style={styles.wBtn} onClick={() => toggleMini(true)} title="迷你播放器（置顶小窗）"><Icon name="maximize" size={13} color="#9ca3af" /></button>
           <button style={styles.wBtn} onClick={() => window.electronAPI.minimize()}>—</button>
