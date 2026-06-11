@@ -59,6 +59,9 @@ function createWindow() {
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true, nodeIntegration: false, webSecurity: false,
+      // 关键：灯带模式下主窗被 hide()，否则 Chromium 会把它的 setInterval 节流到 1Hz，
+      // 喂给灯带的频谱/歌词几乎不流动 → 律动和液滴都动不起来。常驻放歌也需要它。
+      backgroundThrottling: false,
     },
   })
   if (isDev) {
@@ -668,9 +671,12 @@ function makeOverlayWin(width, height) {
     width, height, frame: false, transparent: true, resizable: false, movable: false,
     skipTaskbar: true, focusable: false, show: false, hasShadow: false,
     backgroundColor: '#00000000',
-    webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, webSecurity: false },
+    webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, webSecurity: false, backgroundThrottling: false },
   })
-  w.setAlwaysOnTop(true, 'floating')
+  // screen-saver 层：盖在最大化/普通窗口之上（floating 层会被最大化窗口挡住）。
+  // 全屏独占应用（游戏）仍会盖住，那是 OS 行为。visibleOnAllWorkspaces 保证切桌面也在。
+  w.setAlwaysOnTop(true, 'screen-saver')
+  w.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
   w.setIgnoreMouseEvents(true)      // 默认穿透：仅悬停胶囊区时临时接管
   return w
 }
@@ -710,11 +716,13 @@ ipcMain.handle('set-strip', (_e, on) => {
       mainWindow.on('show', () => { if (stripOn) stopStrip({ showMain: false }) })
     }
     // 光标轮询（8Hz，仅灯带模式期间）：悬停底部中央胶囊区 → 接管鼠标；离开 → 还回穿透
-    let hovering = false
+    // 顺带每 ~2s 重夺一次置顶（被全屏/置顶应用切走 z 序后自愈，保证"一直能看到"）
+    let hovering = false, tick = 0
     if (stripPoll) clearInterval(stripPoll)
     stripPoll = setInterval(() => {
       try {
         if (!stripWin || stripWin.isDestroyed()) return
+        if (++tick % 16 === 0 && !hovering) stripWin.setAlwaysOnTop(true, 'screen-saver')
         const p = screen.getCursorScreenPoint()
         const b = stripWin.getBounds()
         const ix = p.x - b.x, iy = p.y - b.y
