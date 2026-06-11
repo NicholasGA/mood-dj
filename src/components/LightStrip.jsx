@@ -136,7 +136,8 @@ export default function LightStrip() {
         </defs>
       </svg>
       <div style={{ ...s.gooLayer, filter: 'url(#goo)', opacity: playing || open ? 1 : 0 }} aria-hidden>
-        <div style={{ ...s.surface, background: a, transform: `scaleY(${1 + level * 1.6})` }} />
+        {/* 水丘：只在胶囊浮出时隆起（平时光带保持干净的 3px 线，不留突兀的常驻色块） */}
+        <div style={{ ...s.surface, background: a, opacity: open ? 0.95 : 0, transform: `scaleY(${open ? 1 + level * 0.5 : 0.12})` }} />
         <div
           className={open && playing ? 'cap-blob' : ''}
           style={{
@@ -198,9 +199,11 @@ const s = {
   // 液体层（goo 滤镜内只放"形状"）：液面/液颈/液滴用 accent 光色，胶囊皮用 accent 调暗 →
   // 滤镜把它们的 alpha 粘成一体，交界处颜色自然过渡（光把胶囊"裹"起来）
   gooLayer: { position: 'absolute', inset: 0, pointerEvents: 'none', transition: 'opacity .5s ease' },
+  // 水丘：半沉在窗口下沿的椭圆（露出上半），goo 揉圆后是有机的液面隆起而非一块板
   surface: {
-    position: 'absolute', bottom: 0, left: '50%', marginLeft: -220, width: 440, height: 8,
-    borderRadius: 4, transformOrigin: 'bottom', transition: 'transform .12s ease',
+    position: 'absolute', bottom: -11, left: '50%', marginLeft: -150, width: 300, height: 24,
+    borderRadius: '50%', transformOrigin: 'center bottom',
+    transition: 'transform .45s cubic-bezier(.3,1.2,.5,1), opacity .4s ease',
   },
   skin: { position: 'absolute', bottom: 17, left: '50%' },
   neck: {
