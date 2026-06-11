@@ -102,18 +102,31 @@ export default function LightStrip() {
     return () => { cancelAnimationFrame(raf); window.removeEventListener('resize', resize) }
   }, [])
 
+  // 胶囊内容尺寸 → 同步给 goo 层里的"胶囊皮"（皮在滤镜里才有粘连，内容在滤镜外保持锐利）
+  const capRef = useRef(null)
+  const [capSize, setCapSize] = useState({ w: 220, h: 42 })
+  useEffect(() => {
+    const el = capRef.current
+    if (!el || typeof ResizeObserver === 'undefined') return
+    const ro = new ResizeObserver(() => setCapSize({ w: el.offsetWidth, h: el.offsetHeight }))
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+
   const cmd = (c) => window.electronAPI?.stripCmd?.(c)
   const a = track.accent
   const text = line || (track.name ? `${track.name} · ${track.artist}` : 'Mood DJ')
   // 浮出/沉回：浮出带弹性过冲（液滴破水），沉回先加速再吸入
   const rise = open ? 'translateY(0)' : 'translateY(96px)'
   const spring = open ? 'transform .6s cubic-bezier(.34,1.6,.64,1)' : 'transform .42s cubic-bezier(.55,-.15,.75,.35)'
+  const skinColor = `color-mix(in srgb, ${a} 26%, #0b0d13)`   // 胶囊皮：accent 调进深色，跟光带同族
 
   return (
     <div style={s.wrap}>
       <canvas ref={canvasRef} style={s.canvas} />
 
-      {/* goo 液体层：局部液面 + 跟随胶囊的鼓包/液滴，粘连滤镜把它们和光带"融"在一起 */}
+      {/* goo 液体层：液面 + 胶囊皮 + 液颈 + 液滴，全在滤镜里 → 形状真正粘成一体。
+          胶囊皮和液颈是关键：皮=胶囊在液体世界的身体，颈=浮起后仍连着光带的"液桥"。 */}
       <svg width="0" height="0" style={{ position: 'absolute' }} aria-hidden>
         <defs>
           <filter id="goo">
@@ -124,16 +137,20 @@ export default function LightStrip() {
       </svg>
       <div style={{ ...s.gooLayer, filter: 'url(#goo)', opacity: playing || open ? 1 : 0 }} aria-hidden>
         <div style={{ ...s.surface, background: a, transform: `scaleY(${1 + level * 1.6})` }} />
-        <div style={{ ...s.bulge, background: a, transform: rise, transition: `${spring}, opacity .3s`, transitionDelay: '60ms', opacity: open ? 1 : 0.6 }} />
-        <div style={{ ...s.drop, width: 10, height: 10, marginLeft: -34, background: a, transform: rise, transition: spring, transitionDelay: '110ms' }} />
-        <div style={{ ...s.drop, width: 7, height: 7, marginLeft: 30, background: a, transform: rise, transition: spring, transitionDelay: '170ms' }} />
+        <div
+          className={open && playing ? 'cap-blob' : ''}
+          style={{
+            ...s.skin, width: capSize.w, height: capSize.h, marginLeft: -capSize.w / 2,
+            borderRadius: capSize.h / 2, background: skinColor, transform: rise, transition: spring,
+          }}
+        />
+        <div style={{ ...s.neck, background: a, transform: rise, transition: `${spring}, opacity .3s`, transitionDelay: '60ms', opacity: open ? 0.95 : 0.5 }} />
+        <div style={{ ...s.drop, width: 10, height: 10, marginLeft: -30, background: a, transform: rise, transition: spring, transitionDelay: '110ms' }} />
+        <div style={{ ...s.drop, width: 7, height: 7, marginLeft: 26, background: a, transform: rise, transition: spring, transitionDelay: '170ms' }} />
       </div>
 
-      {/* 胶囊本体（不进 goo 滤镜，文字保持锐利）：骑在鼓包上，开合随 rise */}
-      <div
-        className={open && playing ? 'cap-blob' : ''}
-        style={{ ...s.capsule, borderColor: `${a}66`, boxShadow: `0 8px 28px -10px ${a}88`, transform: rise, transition: spring }}
-      >
+      {/* 胶囊内容（滤镜外，文字锐利）：无底色无边框，身体由 goo 层的皮提供 → 不再是两个图层 */}
+      <div ref={capRef} style={{ ...s.capsule, transform: rise, transition: spring }}>
         {track.cover
           ? <img src={track.cover} alt="" style={{ ...s.cover, animation: playing ? 'spin 12s linear infinite' : 'none' }} draggable={false} />
           : <span style={{ ...s.dot, background: a }} />}
@@ -178,25 +195,26 @@ const s = {
   },
   canvas: { position: 'absolute', inset: 0, pointerEvents: 'none' },
 
-  // 液体层（goo 滤镜内只放"形状"，全部用 accent 同色 → 光液质感）
+  // 液体层（goo 滤镜内只放"形状"）：液面/液颈/液滴用 accent 光色，胶囊皮用 accent 调暗 →
+  // 滤镜把它们的 alpha 粘成一体，交界处颜色自然过渡（光把胶囊"裹"起来）
   gooLayer: { position: 'absolute', inset: 0, pointerEvents: 'none', transition: 'opacity .5s ease' },
   surface: {
-    position: 'absolute', bottom: 0, left: '50%', marginLeft: -360, width: 720, height: 7,
+    position: 'absolute', bottom: 0, left: '50%', marginLeft: -220, width: 440, height: 8,
     borderRadius: 4, transformOrigin: 'bottom', transition: 'transform .12s ease',
   },
-  bulge: {
-    position: 'absolute', bottom: 6, left: '50%', width: 34, height: 30, marginLeft: -17,
+  skin: { position: 'absolute', bottom: 17, left: '50%' },
+  neck: {
+    position: 'absolute', bottom: 2, left: '50%', width: 46, height: 30, marginLeft: -23,
     borderRadius: '50%',
   },
   drop: { position: 'absolute', bottom: 4, left: '50%', borderRadius: '50%' },
 
-  // 胶囊（清晰层）
+  // 胶囊内容（清晰层）：无底无框，身体由 goo 层的"皮"提供
   capsule: {
     position: 'absolute', bottom: 17, left: '50%', translate: '-50% 0',
     pointerEvents: 'auto', display: 'flex', alignItems: 'center', gap: 10,
-    maxWidth: 540, padding: '8px 14px', borderRadius: 21,
-    background: 'rgba(13,15,21,0.9)', border: '1px solid',
-    color: '#e8eaf0', whiteSpace: 'nowrap',
+    maxWidth: 540, padding: '8px 14px',
+    color: '#eef0f5', whiteSpace: 'nowrap', textShadow: '0 1px 5px rgba(0,0,0,0.65)',
   },
   cover: { width: 26, height: 26, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 },
   dot: { width: 10, height: 10, borderRadius: '50%', flexShrink: 0 },

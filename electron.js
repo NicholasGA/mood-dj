@@ -715,24 +715,24 @@ ipcMain.handle('set-strip', (_e, on) => {
       mainWindow.__stripShowHook = true
       mainWindow.on('show', () => { if (stripOn) stopStrip({ showMain: false }) })
     }
-    // 光标轮询（8Hz，仅灯带模式期间）：悬停底部中央胶囊区 → 接管鼠标；离开 → 还回穿透
-    // 顺带每 ~2s 重夺一次置顶（被全屏/置顶应用切走 z 序后自愈，保证"一直能看到"）
+    // 光标轮询（8Hz，仅灯带模式期间）：悬停底部中央胶囊区 → 接管鼠标；离开 → 还回穿透。
+    // 关键：每拍都重设接管状态（自愈式，曾因只在变化沿设置而漂移成"控制键点不动"），
+    // 悬停期间每秒重发 hover 同步渲染层；空闲时每 ~2s 重夺置顶（被切走 z 序后自愈）。
     let hovering = false, tick = 0
     if (stripPoll) clearInterval(stripPoll)
     stripPoll = setInterval(() => {
       try {
         if (!stripWin || stripWin.isDestroyed()) return
-        if (++tick % 16 === 0 && !hovering) stripWin.setAlwaysOnTop(true, 'screen-saver')
+        tick++
         const p = screen.getCursorScreenPoint()
         const b = stripWin.getBounds()
         const ix = p.x - b.x, iy = p.y - b.y
         const inside = iy >= b.height - HOVER_H && iy <= b.height &&
                        Math.abs(ix - b.width / 2) <= HOVER_W / 2
-        if (inside !== hovering) {
-          hovering = inside
-          stripWin.setIgnoreMouseEvents(!inside)
-          stripWin.webContents.send('strip-hover', inside)
-        }
+        stripWin.setIgnoreMouseEvents(!inside)   // 每拍自愈，状态绝不漂移
+        if (inside !== hovering || (inside && tick % 8 === 0)) stripWin.webContents.send('strip-hover', inside)
+        hovering = inside
+        if (!inside && tick % 16 === 0) stripWin.setAlwaysOnTop(true, 'screen-saver')
       } catch {}
     }, 125)
     dlog('[strip] ON')
