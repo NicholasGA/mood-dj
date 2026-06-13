@@ -730,8 +730,15 @@ ipcMain.handle('set-strip', (_e, on) => {
         const inside = iy >= b.height - HOVER_H && iy <= b.height &&
                        Math.abs(ix - b.width / 2) <= HOVER_W / 2
         stripWin.setIgnoreMouseEvents(!inside)   // 每拍自愈，状态绝不漂移
-        if (inside !== hovering || (inside && tick % 8 === 0)) stripWin.webContents.send('strip-hover', inside)
-        hovering = inside
+        if (inside !== hovering) {
+          hovering = inside
+          // 实测：focusable:false 会挡掉真实 OS 鼠标点击（sendInputEvent 注入可绕过，极易误判）。
+          // 悬停胶囊时才设为可聚焦 → 控制键点得动；离开恢复，平时不抢焦点/不进 Alt-Tab。
+          stripWin.setFocusable(inside)
+          stripWin.webContents.send('strip-hover', inside)
+        } else if (inside && tick % 8 === 0) {
+          stripWin.webContents.send('strip-hover', true)   // 周期重发，渲染层状态不漂
+        }
         if (!inside && tick % 16 === 0) stripWin.setAlwaysOnTop(true, 'screen-saver')
       } catch {}
     }, 125)
