@@ -798,7 +798,9 @@ export default function App() {
         }
         level = Math.round(((bands[0] + bands[1] + bands[2] + bands[3]) / 4) * 100) / 100
       }
-      send({ t: 'frame', bands, level, playing })
+      const dur = audio?.duration || 0
+      const progress = dur ? Math.min(1, audio.currentTime / dur) : 0   // 灯带光带上画播放进度
+      send({ t: 'frame', bands, level, playing, progress })
       // 歌词行变化才发一条（胶囊据此弹出）
       const lines = lyric?.lines || []
       if (lines.length && audio) {
