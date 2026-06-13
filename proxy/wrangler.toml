@@ -7,4 +7,4 @@ compatibility_date = "2024-11-01"
 # 把命令输出的 id 填到下面，再部署。
 [[kv_namespaces]]
 binding = "RL"
-id = "PUT_YOUR_KV_NAMESPACE_ID_HERE"
+id = "4a1bdd69108d4ca4a3a3d5bdd2a6b461"
