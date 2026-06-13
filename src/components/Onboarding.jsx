@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { configureLLM } from '../services/claudeDJ'
+import { configureLLM, usesBuiltinAI } from '../services/claudeDJ'
 import { glass } from '../ui/surface'
 
 // 既是首次新手引导，也是设置面板（canClose=true 时可关闭返回）
@@ -19,6 +19,7 @@ export default function Onboarding({ qqCookies, onQQAuth, onReady, onClose, canC
 
   const qqDone = !!qqCookies
   const keyDone = !!geminiKey.trim() || !!openrouterKey.trim()
+  const builtin = usesBuiltinAI() && !keyDone   // 内置共享 AI 可用且用户没填自己的 key
   const open = (url) => window.electronAPI.openExternal(url)
 
   async function connectQQ() {
@@ -72,11 +73,13 @@ export default function Onboarding({ qqCookies, onQQAuth, onReady, onClose, canC
         {/* Step 2: AI key */}
         <div style={s.step}>
           <div style={s.stepHead}>
-            <span style={{ ...s.dot, background: keyDone ? '#31c27c' : 'rgba(255,255,255,0.15)' }}>{keyDone ? '✓' : '2'}</span>
-            <span style={s.stepTitle}>配置 AI（可选）</span>
+            <span style={{ ...s.dot, background: (keyDone || builtin) ? '#31c27c' : 'rgba(255,255,255,0.15)' }}>{(keyDone || builtin) ? '✓' : '2'}</span>
+            <span style={s.stepTitle}>{builtin ? 'AI 已内置 · 开箱即用' : '配置 AI（可选）'}</span>
           </div>
           <p style={s.hint}>
-            填了才有「AI 分析心情 / 智能选歌 / 基于歌词的歌曲介绍」；<b style={{ color: '#cbd5e1' }}>不填也能用</b>——这些会用本地兜底，随时能回设置里补。
+            {builtin
+              ? <>「AI 分析心情 / 智能选歌 / 歌曲介绍」<b style={{ color: '#cbd5e1' }}>已内置，无需配置</b>——用的是共享额度（有每日限流，超额自动切本地兜底）。想要专属完整额度，可填自己的 Gemini Key（可选）。</>
+              : <>填了才有「AI 分析心情 / 智能选歌 / 基于歌词的歌曲介绍」；<b style={{ color: '#cbd5e1' }}>不填也能用</b>——这些会用本地兜底，随时能回设置里补。</>}
             <span style={s.link} onClick={() => open('https://aistudio.google.com/apikey')}>　免费获取 Gemini Key →</span>
           </p>
           <input style={s.input} type="password" placeholder="Gemini API Key（多个逗号分隔，可留空）"
@@ -96,7 +99,7 @@ export default function Onboarding({ qqCookies, onQQAuth, onReady, onClose, canC
         <button
           style={{ ...s.btn, marginTop: 6, background: qqDone ? 'linear-gradient(135deg,#7c3aed,#4f46e5)' : '#374151', cursor: qqDone ? 'pointer' : 'not-allowed' }}
           onClick={() => qqDone && finish()} disabled={!qqDone}>
-          {canClose ? '保存并返回' : (keyDone ? '开始使用 →' : '先用着（不填 key 也行）→')}
+          {canClose ? '保存并返回' : ((keyDone || builtin) ? '开始使用 →' : '先用着（不填 key 也行）→')}
         </button>
 
         <p style={s.foot}>

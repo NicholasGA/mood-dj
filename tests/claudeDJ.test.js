@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest'
-import { splitKeys, localInterpret, configureLLM, hasLLMKey, evalBudget, sanitizeHex } from '../src/services/claudeDJ'
+import { describe, it, expect, vi, afterEach } from 'vitest'
+import { splitKeys, localInterpret, configureLLM, hasLLMKey, usesBuiltinAI, interpretRequest, evalBudget, sanitizeHex } from '../src/services/claudeDJ'
 
 describe('sanitizeHex（校验模型给的颜色，挡住 NaN 流进 canvas）', () => {
   it('合法 6 位 / 3 位都规整成 #rrggbb 小写', () => {
@@ -120,7 +120,7 @@ describe('localInterpret（AI 不可用时的本地点歌解析）', () => {
 
 describe('configureLLM / hasLLMKey', () => {
   it('配了 key → true；清空 → false', () => {
-    configureLLM({ geminiKey: '', openrouterKey: '' })
+    configureLLM({ geminiKey: '', openrouterKey: '', proxyUrl: '' })
     expect(hasLLMKey()).toBe(false)
     configureLLM({ geminiKey: 'AIza-test-key' })
     expect(hasLLMKey()).toBe(true)
@@ -128,6 +128,40 @@ describe('configureLLM / hasLLMKey', () => {
     expect(hasLLMKey()).toBe(true)
     configureLLM({ geminiKey: '', openrouterKey: '' })
     expect(hasLLMKey()).toBe(false)
+  })
+})
+
+describe('内置共享代理（零配置开箱即用）', () => {
+  it('只配了代理地址 → hasLLMKey true 且 usesBuiltinAI true（首启无需 key）', () => {
+    configureLLM({ geminiKey: '', openrouterKey: '', proxyUrl: 'https://proxy.test' })
+    expect(hasLLMKey()).toBe(true)
+    expect(usesBuiltinAI()).toBe(true)
+  })
+  it('用户填了自己的 key → 不再算"吃内置代理"（走自己的额度）', () => {
+    configureLLM({ proxyUrl: 'https://proxy.test', geminiKey: 'AIza-mine' })
+    expect(usesBuiltinAI()).toBe(false)
+    expect(hasLLMKey()).toBe(true)
+  })
+  it('既无 key 也无代理 → 全 false', () => {
+    configureLLM({ geminiKey: '', openrouterKey: '', proxyUrl: '' })
+    expect(hasLLMKey()).toBe(false)
+    expect(usesBuiltinAI()).toBe(false)
+  })
+})
+
+describe('代理路由（stub fetch 验证零配置确实走代理）', () => {
+  afterEach(() => { vi.unstubAllGlobals(); configureLLM({ geminiKey: '', openrouterKey: '', proxyUrl: '' }) })
+  it('只配代理时，点歌解析经 gemini() 打到 PROXY_URL 并解析返回的 {text}', async () => {
+    const calls = []
+    vi.stubGlobal('fetch', async (url) => {
+      calls.push(String(url))
+      return { ok: true, status: 200, json: async () => ({ text: '{"mode":"normal","artists":["周杰伦"],"keywords":["抒情"],"mood_name":"周式情歌","dj_intro":"来点周董"}' }) }
+    })
+    configureLLM({ geminiKey: '', openrouterKey: '', proxyUrl: 'https://proxy.test/llm' })
+    const r = await interpretRequest('我想听周杰伦的歌')
+    expect(calls.some(u => u.includes('proxy.test'))).toBe(true)   // 确实打到代理
+    expect(calls.some(u => u.includes('generativelanguage') || u.includes('openrouter'))).toBe(false)  // 没碰真上游
+    expect(r.artists).toEqual(['周杰伦'])
   })
 })
 

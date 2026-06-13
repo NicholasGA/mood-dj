@@ -15,6 +15,9 @@ let OPENROUTER_KEY = import.meta.env.VITE_OPENROUTER_API_KEY || ''
 // 默认用中文母语的免费模型（GLM-Air：轻量低延迟）；:free 会轮换下架，故带一串中文系兜底逐个试
 let OPENROUTER_MODEL = import.meta.env.VITE_OPENROUTER_MODEL || 'z-ai/glm-4.5-air:free'
 const OPENROUTER_FALLBACKS = ['z-ai/glm-4.5-air:free', 'qwen/qwen3-next-80b-a3b-instruct:free', 'moonshotai/kimi-k2.6:free']
+// 内置共享代理（零配置开箱即用）：key 存在服务端 Worker、按 IP 限流，客户端不持任何 key。
+// 打包时由 VITE_LLM_PROXY_URL 注入；用户在设置里填自己的 key 即绕过共享额度走自己的。
+let PROXY_URL = import.meta.env.VITE_LLM_PROXY_URL || ''
 
 // 应用启动时用持久化配置覆盖
 export function configureLLM(cfg = {}) {
@@ -22,9 +25,13 @@ export function configureLLM(cfg = {}) {
   if (cfg.geminiModel) MODEL = cfg.geminiModel
   if (cfg.openrouterKey != null) OPENROUTER_KEY = cfg.openrouterKey.trim()
   if (cfg.openrouterModel) OPENROUTER_MODEL = cfg.openrouterModel
+  if (cfg.proxyUrl != null) PROXY_URL = cfg.proxyUrl.trim()
   if (cfg.dailyLimit) DAILY_LIMIT = Number(cfg.dailyLimit) || DAILY_LIMIT
 }
-export function hasLLMKey() { return GEMINI_KEYS.length > 0 || !!OPENROUTER_KEY }
+// 有任意可用的 AI 通道（自己的 key 或内置代理）即视为已就绪
+export function hasLLMKey() { return GEMINI_KEYS.length > 0 || !!OPENROUTER_KEY || !!PROXY_URL }
+// 是否在吃内置共享代理（没配自己的 key）——给引导页措辞用
+export function usesBuiltinAI() { return !!PROXY_URL && GEMINI_KEYS.length === 0 && !OPENROUTER_KEY }
 
 // ── 每日 LLM 调用预算（省配额：让免费额度撑一天）────────────────────────────
 // 客户端按本地日期计数，超额就让调用方走本地兜底（而不是把真实配额耗尽/到处报错）。
@@ -79,6 +86,19 @@ async function callGemini(key, system, userMsg, maxTokens, temperature) {
   return (data.candidates?.[0]?.content?.parts ?? []).filter(p => !p.thought).map(p => p.text).join('').trim()
 }
 
+// 内置共享代理：POST {system,user,maxTokens,temperature} → 服务端带 key 转发 Gemini，回 {text}
+async function callProxy(system, userMsg, maxTokens, temperature) {
+  const res = await fetchJSON(PROXY_URL, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ system, user: userMsg, maxTokens, temperature }),
+  })
+  if (res.status === 429) { const e = new Error('proxy rate-limited'); e.rateLimited = true; throw e }
+  if (!res.ok) throw new Error(`proxy ${res.status}`)
+  const text = ((await res.json()).text || '').trim()
+  if (!text) throw new Error('proxy empty')
+  return text
+}
+
 async function callOpenRouter(system, userMsg, maxTokens, temperature) {
   // 依次试 默认模型 + 中文系兜底（某个被下架/限流就换下一个）
   const models = [OPENROUTER_MODEL, ...OPENROUTER_FALLBACKS].filter((m, i, a) => a.indexOf(m) === i)
@@ -129,6 +149,12 @@ async function gemini(system, userMsg, { maxTokens = 600, temperature = 0.9, kin
   }
   if (OPENROUTER_KEY) {
     try { return await callOpenRouter(system, userMsg, maxTokens, temperature) } catch {}
+  }
+  // 零配置兜底：用户没配自己的 key（或全挂了）→ 走内置共享代理（服务端持 key + 限流）。
+  // 代理超额/不可用就抛错，调用方各自降级到本地兜底（localInterpret/localMoodConfig/localPersona）。
+  if (PROXY_URL) {
+    try { const out = await callProxy(system, userMsg, maxTokens, temperature); bumpBudget(budget.date); return out }
+    catch (e) { if (e.rateLimited) sawRateLimit = true }
   }
   throw new Error(sawRateLimit ? 'all keys rate-limited' : 'llm failed')
 }

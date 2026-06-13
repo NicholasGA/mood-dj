@@ -1,0 +1,10 @@
+name = "mooddj-llm-proxy"
+main = "worker.js"
+compatibility_date = "2024-11-01"
+
+# 每 IP 每日限流计数用的 KV。
+# 先建命名空间：  npx wrangler kv namespace create RL
+# 把命令输出的 id 填到下面，再部署。
+[[kv_namespaces]]
+binding = "RL"
+id = "PUT_YOUR_KV_NAMESPACE_ID_HERE"
