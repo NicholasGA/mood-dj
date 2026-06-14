@@ -1040,27 +1040,18 @@ export default function App() {
         if (favRef.current?.sample?.length) add(favRef.current.sample)
         const myFav = favRef.current?.playlistIds?.[0]
         if (myFav) { try { await getPlaylistTracks(qqCookiesRef.current, myFav, 60, Math.floor(Math.random() * 3) * 60).then(add).catch(() => {}) } catch {} }
+      } else if (artistList.length) {
+        // 点名歌手：只听他本人——多翻几页 searchByArtist（只返回该歌手的歌），交给精排按降低后的能量挑安静的。
+        // 不掺 AI 推荐/关键词全文搜/歌单："安静"等是大众歌名，全文搜或 AI 推荐会混进各路别人的同名歌。
+        for (const ar of artistList.slice(0, 2)) {
+          ;(await Promise.allSettled([2, 3, 4, 5].map(p => searchByArtist(qqCookiesRef.current, ar, 20, p)))).forEach(r => r.status === 'fulfilled' && add(r.value))
+        }
       } else {
-        // AI 选歌（核心）：实锤歌手时按"听正主"措辞框定需求（限定词跟上）；探索时附上最近听过清单让 AI 避开
+        // 没点名歌手（心情/探索）：AI 选歌 + 关键词搜 + 歌单
         const avoid = discover ? (memoryRef.current.history || []).slice(0, 30).map(h => `${h.name}-${(h.artists || []).map(a => a.name).join('/')}`) : []
-        const req = confirmed.length
-          ? `想听 ${confirmed.join('、')} 的歌${intent.keywords?.length ? `，偏${intent.keywords.slice(0, 2).join('、')}的` : ''}（以本人为主，别掺别的歌手）`
-          : t
-        try { add(await resolveRecommended(await recommendSongs(req, tasteHint, { n: 12, discover, avoid }))) } catch {}
-      }
-      // 关键词文本搜索只在「没点名歌手」时用：有正主时，searchTracks("周杰伦 安静") 是 QQ 全文搜，
-      // 会把各路歌手名叫《安静》的歌全捞回来（"安静"是大众歌名）→ 一堆别人的歌、歌名全是安静。
-      // 有正主就改为多翻几页 searchByArtist（只返回该歌手的歌），把"挑安静的"交给精排按降低后的能量筛。
-      if (!artistList.length) {
+        try { add(await resolveRecommended(await recommendSongs(t, tasteHint, { n: 12, discover, avoid }))) } catch {}
         const kwPage = () => discover ? 3 + Math.floor(Math.random() * 8) : 1 + Math.floor(Math.random() * 4)
         ;(await Promise.allSettled((intent.keywords || []).map(q => searchTracks(qqCookiesRef.current, q, 15, kwPage())))).forEach(r => r.status === 'fulfilled' && add(r.value))
-      } else {
-        for (const ar of artistList.slice(0, 2)) {
-          ;(await Promise.allSettled([2, 3, 4].map(p => searchByArtist(qqCookiesRef.current, ar, 20, p)))).forEach(r => r.status === 'fulfilled' && add(r.value))
-        }
-      }
-      // 没点歌手时，搜歌单补充变化（探索时专挑冷门/宝藏歌单）
-      if (!artistList.length && !favorite) {
         try {
           const plQ = discover ? '小众 冷门 宝藏 私藏' : (intent.keywords?.[0] || t)
           const pls = await searchPlaylists(qqCookiesRef.current, plQ, 8)
@@ -1068,6 +1059,15 @@ export default function App() {
           ctx.playlistIds.push(...ids.filter(id => !ctx.playlistIds.includes(id)))
           ;(await Promise.allSettled(ids.map(id => getPlaylistTracks(qqCookiesRef.current, id, 50)))).forEach(r => r.status === 'fulfilled' && add(r.value))
         } catch {}
+      }
+
+      // 兜底：点名歌手但池子空了（正主的歌全进过 seen——重度使用/反复点同一人常见）→
+      // 放宽 seen 限制再捞一遍正主，只避开不喜欢的 + 当前池已有的。宁可重听他的歌，也别空台。
+      if (!pool.length && artistList.length) {
+        const relaxedAdd = (arr) => { for (const x of arr || []) if (x?.mid && !disliked(x) && !pool.some(p => p.mid === x.mid)) pool.push(x) }
+        for (const ar of artistList.slice(0, 2)) {
+          ;(await Promise.allSettled([1, 2, 3, 4].map(p => searchByArtist(qqCookiesRef.current, ar, 20, p)))).forEach(r => r.status === 'fulfilled' && relaxedAdd(r.value))
+        }
       }
 
       if (!pool.length) { showToast('没找到合适的，换个说法试试'); return }
