@@ -11,7 +11,8 @@ import Icon from './components/Icon'
 import { searchTracks, getSongUrl, getLyric, searchPlaylists, getPlaylistTracks, searchByArtist, canonicalArtist } from './services/qqMusicApi'
 import { analyzeMood, generateStory, curateTracks, interpretRequest, recommendSongs, localInterpret, configureLLM, hasLLMKey, analyzeTaste, generatePersona, configurePersona, getPersona } from './services/claudeDJ'
 import { localStory, localMoodConfig, memoryNote } from './services/djText'
-import { greeting, localPersona, vibeReaction } from './services/djPersona'
+import { localPersona, vibeReaction } from './services/djPersona'
+import { recordVisit, sessionGreeting } from './services/sessionMemory'
 import { effectiveVolume, clampVol } from './services/audioVolume'
 import { glassSoft } from './ui/surface'
 import { freshen, pushRecent, removeAt, moveToFront, pushHistory, buildKnownMids } from './services/radio'
@@ -84,6 +85,12 @@ export default function App() {
   const favRef = useRef(null)          // 用户收藏：{ playlistIds, topArtists, sample, favCount }
   const memoryRef = useRef({ likedTracks: [], dislikedArtists: [] })   // 跨会话口味记忆
   const saveMemory = useCallback(() => { window.electronAPI.storeMemory(memoryRef.current) }, [])
+  // 节流持久化：被动听歌（不点赞/不调味）时也把 lastTrack/totalPlayed/visits 落盘，最多每 30s 一次
+  const lastMemSaveRef = useRef(0)
+  const maybeSaveMemory = useCallback(() => {
+    const now = Date.now()
+    if (now - lastMemSaveRef.current > 30000) { lastMemSaveRef.current = now; saveMemory() }
+  }, [saveMemory])
   const lastSpokeRef = useRef(0)         // 上次语音播报时间（节流，文字每首都显示）
   const [djSpeak, setDjSpeak] = useState(false)   // 本次播报是否出声
 
@@ -247,15 +254,20 @@ export default function App() {
     }).catch(() => {})
   }, [tasteProfile, favCount])
 
-  // 启动问候（本地，零 API）：人格 + 时段 + 上次到访 → 一句"会记得你"的开场。进主界面一次。
+  // 启动问候（本地，零 API）：人格 + 时段 + 跨会话记忆（来得勤/老地方老时间/上次在听什么/里程碑）
+  // → 一句"会记得你"的开场。进主界面一次。先记到访再生成问候（这周第N次含本次）。
   const greetedRef = useRef(false)
   useEffect(() => {
     if (greetedRef.current || !qqCookies || !llmReady) return
     greetedRef.current = true
     const mem = memoryRef.current
     const persona = getPersona() || localPersona([])
-    const line = greeting(persona, Date.now(), mem.lastSeen || null)
-    mem.lastSeen = Date.now(); saveMemory()
+    const now = Date.now()
+    mem.visits = recordVisit(mem.visits, now)
+    const { line, celebrate } = sessionGreeting(persona, now, mem)
+    mem.lastSeen = now
+    if (celebrate) mem.celebratedPlays = celebrate
+    saveMemory()
     setAnnouncement(line); setShowAnnouncement(true)
     setTimeout(() => setShowAnnouncement(false), 5200)
   }, [qqCookies, llmReady])
@@ -264,6 +276,16 @@ export default function App() {
   useEffect(() => {
     window.electronAPI.notifyNowPlaying?.(currentTrack ? { name: currentTrack.name, artist: currentTrack.artists?.map(a => a.name).join('/') || '' } : null)
   }, [currentTrack])
+
+  // 跨会话记忆落盘兜底：切歌是 30s 节流的，关窗/隐藏到托盘/最小化时强制 flush 一次，
+  // 否则节流窗内连切几首再收托盘会少记 totalPlayed/lastTrack，里程碑偏晚。
+  useEffect(() => {
+    const flush = () => { try { saveMemory() } catch {} }
+    const onVis = () => { if (document.visibilityState === 'hidden') flush() }
+    document.addEventListener('visibilitychange', onVis)
+    window.addEventListener('beforeunload', flush)
+    return () => { document.removeEventListener('visibilitychange', onVis); window.removeEventListener('beforeunload', flush) }
+  }, [saveMemory])
 
   // 全局键盘快捷键：空格 播放/暂停、→ 下一首、← 快退5s、↑↓ 音量、L 喜欢、M 静音（输入框内不拦截）
   useEffect(() => {
@@ -543,6 +565,10 @@ export default function App() {
           setError('')
           memoryRef.current.recentMids = pushRecent(memoryRef.current.recentMids || [], next.mid)  // 记最近放过
           memoryRef.current.history = pushHistory(memoryRef.current.history || [], next, 100)       // 播放历史(新→旧)
+          // 跨会话记忆：记下"上次在听什么"+ 累计听歌数（供下次启动的问候点名/里程碑），节流落盘
+          memoryRef.current.lastTrack = { name: next.name, artist: (next.artists || []).map(a => a.name).join('/'), mid: next.mid, at: Date.now() }
+          memoryRef.current.totalPlayed = (memoryRef.current.totalPlayed || 0) + 1
+          maybeSaveMemory()
           if (q.length < 6) replenishQueue()          // 偏低就后台补歌（不阻塞）
           return
         } catch { /* 这首放不了，试下一首 */ }
@@ -559,7 +585,7 @@ export default function App() {
       isAdvancingRef.current = false
       setLoadingTrack(false)
     }
-  }, [showDJ, playTrack, replenishQueue])
+  }, [showDJ, playTrack, replenishQueue, maybeSaveMemory])
 
   // ── 系统媒体控制（Windows SMTC / 媒体键 / 锁屏）─────────────────
   // 动作处理（播放/暂停/上下曲/快进退）
