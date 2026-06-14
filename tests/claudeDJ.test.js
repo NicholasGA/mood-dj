@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { splitKeys, localInterpret, configureLLM, hasLLMKey, usesBuiltinAI, interpretRequest, evalBudget, sanitizeHex } from '../src/services/claudeDJ'
+import { splitKeys, localInterpret, configureLLM, hasLLMKey, usesBuiltinAI, interpretRequest, extractMods, steerEnergyDelta, isContinuation, mergeContinuation, evalBudget, sanitizeHex } from '../src/services/claudeDJ'
 
 describe('sanitizeHex（校验模型给的颜色，挡住 NaN 流进 canvas）', () => {
   it('合法 6 位 / 3 位都规整成 #rrggbb 小写', () => {
@@ -115,6 +115,96 @@ describe('localInterpret（AI 不可用时的本地点歌解析）', () => {
 
   it('英文名带空格（Taylor Swift）→ 允许当单一歌手', () => {
     expect(localInterpret('来点Taylor Swift的歌').artists).toEqual(['Taylor Swift'])
+  })
+})
+
+describe('多轮对话点歌：extractMods / steerEnergyDelta', () => {
+  it('安静类 → 负能量增量 + 安静关键词', () => {
+    const r = extractMods('再安静一点的')
+    expect(r.keywords).toContain('安静')
+    expect(r.dE).toBeLessThan(0)
+  })
+  it('嗨/燃类 → 正能量增量', () => {
+    expect(steerEnergyDelta('更嗨的').dE).toBeGreaterThan(0)
+    expect(steerEnergyDelta('快一点').dE).toBeGreaterThan(0)
+  })
+  it('甜/伤 → 情绪增量正/负', () => {
+    expect(steerEnergyDelta('来点甜的').dV).toBeGreaterThan(0)
+    expect(steerEnergyDelta('更伤感的').dV).toBeLessThan(0)
+  })
+  it('无修饰词 → 零增量', () => {
+    expect(steerEnergyDelta('随便')).toEqual({ dE: 0, dV: 0 })
+  })
+  it('增量夹在 ±0.4', () => {
+    const r = extractMods('又安静又慢又柔又轻')   // 多个负向词叠加
+    expect(r.dE).toBeGreaterThanOrEqual(-0.4)
+  })
+})
+
+describe('多轮对话点歌：isContinuation / mergeContinuation', () => {
+  const prev = { mode: 'normal', artists: ['周杰伦'], keywords: ['抒情'] }
+
+  it('续接句识别：再来点这种/更安静/他的快歌 → true', () => {
+    expect(isContinuation('再来点这种')).toBe(true)
+    expect(isContinuation('更安静的')).toBe(true)
+    expect(isContinuation('他的快歌')).toBe(true)
+  })
+  it('全新点名 → 非续接', () => {
+    expect(isContinuation('想听林俊杰', { artists: ['林俊杰'] })).toBe(false)
+  })
+
+  it('"再安静点" → 继承上次歌手，关键词换成安静', () => {
+    const r = mergeContinuation(prev, { mode: 'normal', artists: [], keywords: [], mood_name: '', dj_intro: '好' }, '再安静一点的')
+    expect(r.artists).toEqual(['周杰伦'])
+    expect(r.keywords).toContain('安静')
+  })
+  it('"再来点这种"（无新修饰）→ 沿用上次歌手与方向', () => {
+    const r = mergeContinuation(prev, { mode: 'normal', artists: [], keywords: [] }, '再来点这种')
+    expect(r.artists).toEqual(['周杰伦'])
+    expect(r.keywords).toEqual(['抒情'])
+  })
+  it('本地把续接词误当歌手（"再来点"）→ 被过滤、回落上次歌手', () => {
+    const r = mergeContinuation(prev, { mode: 'normal', artists: ['再来点'], keywords: [] }, '再来点这种')
+    expect(r.artists).toEqual(['周杰伦'])
+  })
+  it('全新独立请求 → 原样返回（不接上次）', () => {
+    const cur = { mode: 'normal', artists: ['林俊杰'], keywords: [] }
+    expect(mergeContinuation(prev, cur, '想听林俊杰').artists).toEqual(['林俊杰'])
+  })
+  it('无 prev → 原样返回', () => {
+    const cur = { mode: 'normal', artists: ['A'], keywords: [] }
+    expect(mergeContinuation(null, cur, '再来点')).toBe(cur)
+  })
+
+  // 回归：含"这种/一样"但自带新方向的句子，绝不能被锁回上次歌手（评审 #1/#2/#5）
+  it('"想听这种感觉的民谣"（自带新方向）→ 不锁旧歌手', () => {
+    const cur = { mode: 'normal', artists: [], keywords: ['民谣'] }
+    const r = mergeContinuation(prev, cur, '想听这种感觉的民谣')
+    expect(r.artists).toEqual([])
+    expect(r.keywords).toContain('民谣')
+  })
+  it('"一样是华语但要新歌手"（discover）→ 不锁旧歌手、保 discover', () => {
+    const cur = { mode: 'discover', artists: [], keywords: ['华语'] }
+    const r = mergeContinuation(prev, cur, '一样是华语但要新歌手')
+    expect(r.artists).toEqual([])
+    expect(r.mode).toBe('discover')
+  })
+  it('上次 normal + "再来点没听过的"（discover）→ 切 discover 且不锁旧歌手', () => {
+    const cur = { mode: 'discover', artists: [], keywords: ['小众宝藏'] }
+    const r = mergeContinuation(prev, cur, '再来点没听过的')
+    expect(r.mode).toBe('discover')
+    expect(r.artists).toEqual([])
+  })
+  it('本地把"再安静"误当歌手 → 滤掉、回落上次歌手（续接修饰）', () => {
+    const cur = { mode: 'normal', artists: ['再安静'], keywords: ['再安静'] }
+    const r = mergeContinuation(prev, cur, '再安静一点的')
+    expect(r.artists).toEqual(['周杰伦'])
+    expect(r.keywords).toContain('安静')
+  })
+  it('点名含修饰字的歌名"快乐崇拜" → 非续接、原样保留', () => {
+    const cur = { mode: 'normal', artists: ['快乐崇拜'], keywords: [] }
+    expect(isContinuation('想听快乐崇拜', cur)).toBe(false)
+    expect(mergeContinuation(prev, cur, '想听快乐崇拜').artists).toEqual(['快乐崇拜'])
   })
 })
 

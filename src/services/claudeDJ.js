@@ -233,15 +233,72 @@ export function localInterpret(text) {
   return { mode, artists, keywords, mood_name: (artist || mood || (discover ? '探索新歌' : favorite ? '我的收藏' : raw)).slice(0, 6) || '点歌', dj_intro }
 }
 
+// ── 多轮对话点歌：把"再安静点/多来点这种/他的快歌"接到上一次意图上（纯函数，可单测）──
+// 修饰词 → 搜索关键词 + 能量(dE)/情绪(dV)增量。能量词只调 E/V 并给搜索词，互斥词靠"新词覆盖旧词"化解矛盾。
+const STEER_MODS = [
+  { re: /安静|安靜|轻柔|輕柔|温柔|溫柔|舒缓|舒緩|慢(一?点|歌|節奏|节奏)?|轻一?点|輕一?點|放松|放鬆|柔/, kw: '安静', dE: -0.22, dV: 0 },
+  { re: /嗨|燃|带劲|帶勁|有劲|有勁|劲爆|勁爆|动感|動感|快(一?点|節奏|节奏)?|激烈|炸|蹦迪|high/i, kw: '燃 快节奏', dE: 0.22, dV: 0 },
+  { re: /甜|欢快|歡快|开心|開心|快乐|快樂|明亮|阳光|陽光|元气|元氣/, kw: '欢快', dE: 0, dV: 0.22 },
+  { re: /伤感?|傷感?|丧|喪|emo|难过|難過|悲|催泪|催淚|虐心/i, kw: '伤感', dE: 0, dV: -0.22 },
+  { re: /抒情|深情|情歌/, kw: '抒情', dE: 0, dV: 0 },
+  { re: /怀旧|懷舊|老歌|经典|經典|复古|復古/, kw: '怀旧', dE: 0, dV: 0 },
+]
+// 从一句话抽修饰：关键词集合 + 能量/情绪增量（各自夹在 ±0.4）
+export function extractMods(text) {
+  const t = text || '', kws = []; let dE = 0, dV = 0
+  for (const m of STEER_MODS) if (m.re.test(t)) { kws.push(m.kw); dE += m.dE; dV += m.dV }
+  return { keywords: kws, dE: Math.max(-0.4, Math.min(0.4, dE)), dV: Math.max(-0.4, Math.min(0.4, dV)) }
+}
+// 给 steerRadio 用：仅取能量/情绪增量
+export function steerEnergyDelta(text) { const { dE, dV } = extractMods(text); return { dE, dV } }
+
+// 续接信号：再来点/多放些/这种/类似/换批，以及代词"他的/她的/这位"
+const CONT_RE = /(再|還|还|也|继续|繼續|接着|接著|多)(来|來|多|放|听|聽|搞|整|点|點|些|要|想|一|首)|这种|這种|这类|這類|那种|那種|这样|這樣|类似|類似|差不多|一样|一樣|同样|同樣|换(一)?批|換(一)?批|(他|她|它)的|这位|那位|這位/
+// "再/更/换…"开头的续接引导词（本地解析可能把后面的残词误当歌手，靠它兜住）
+const LEAD_RE = /^(再|還|还|也|多|更|換|换|继续|繼續|接着|接著)/
+const isMod = (s) => STEER_MODS.some(m => m.re.test(s || ''))
+// 判定是不是承接上一次的续接句
+export function isContinuation(text, cur = {}, mods = null) {
+  if (!text) return false
+  if (CONT_RE.test(text)) return true
+  const m = mods || extractMods(text)
+  if (!m.keywords.length) return false
+  // 纯修饰句（没点新歌手），或带"再/更/换"等引导词（即便本地把残词误当歌手也算）
+  return !(cur.artists && cur.artists.length) || LEAD_RE.test(text)
+}
+
+const dedupeArr = (a) => [...new Set((a || []).filter(Boolean))]
+
+// 把当前解析 cur 接到上一次 prev 上（仅当判定为续接）。返回合并后的 intent；非续接/无 prev 原样返回。
+export function mergeContinuation(prev, cur, text) {
+  if (!prev) return cur
+  const mods = extractMods(text)
+  if (!isContinuation(text, cur, mods)) return cur   // 全新独立请求，不接
+  // 滤掉本地把续接词/引导词/修饰词误当成的"歌手"（如"再来点""再安静"），剩下的才是真·新点名
+  const junk = (a) => CONT_RE.test(a) || LEAD_RE.test(a) || isMod(a)
+  const curArtists = (cur.artists || []).filter(a => a && !junk(a))
+  const curKw = cur.keywords || []
+  // 真·新方向 = 这次自带新歌手 / 非纯修饰的新关键词 / 显式换了 discover|favorite
+  const newDirection = curArtists.length > 0 || curKw.some(k => !isMod(k)) || (cur.mode && cur.mode !== 'normal')
+  // 只有"纯修饰续接句"（没换主角、没给新方向）才继承上次歌手；否则尊重这次的新方向，别锁死旧正主
+  const artists = curArtists.length ? curArtists : (newDirection ? [] : (prev.artists || []))
+  const mode = (cur.mode && cur.mode !== 'normal') ? cur.mode : (prev.mode || 'normal')
+  // 有新修饰/新词 → 用新的（"更安静"覆盖旧"嗨"避免矛盾）；纯"再来点这种" → 沿用上次方向
+  const fresh = dedupeArr([...mods.keywords, ...curKw])
+  const keywords = fresh.length ? fresh : (prev.keywords || [])
+  return { mode, artists, keywords, mood_name: cur.mood_name || prev.mood_name, dj_intro: cur.dj_intro }
+}
+
 // 解析对话点歌请求 → 意图 mode / 歌手 / 关键词 / 心情（AI 优先，失败回退本地解析）。
-// taste: { genres, artists } 给 AI 当探索方向的参考。
-export async function interpretRequest(text, taste = {}) {
+// taste: { genres, artists } 给 AI 当探索方向的参考；prev: 上一次的意图，用于多轮续接（"再安静点"）。
+export async function interpretRequest(text, taste = {}, prev = null) {
   const tasteHint = (taste.genres?.length || taste.artists?.length)
     ? `\n听众口味：曲风[${(taste.genres || []).slice(0, 4).join('、')}] 常听[${(taste.artists || []).slice(0, 5).join('、')}]。探索意图时据此延伸到相邻但新鲜的方向。` : ''
+  const prevHint = prev ? `\n上一次的需求：${prev.artists?.length ? `歌手[${prev.artists.join('、')}] ` : ''}${prev.keywords?.length ? `方向[${prev.keywords.join('、')}] ` : ''}模式${prev.mode || 'normal'}。若这句是在上一次基础上的微调（如"再安静点""多来点这种""他的快歌"），就在上一次的歌手/方向上调整，别当成全新请求。` : ''
   try {
     const system = withPersona(`你解析用户的点歌/换歌请求，只输出JSON，不要解释。dj_intro 用你这个 DJ 一贯的口吻回应。`)
     const raw = await gemini(system, `
-用户说："${text}"${tasteHint}
+用户说："${text}"${tasteHint}${prevHint}
 解析意图，返回JSON：
 {
   "mode": "discover | favorite | normal",
@@ -258,7 +315,8 @@ export async function interpretRequest(text, taste = {}) {
 "我想听chilichill的歌"→{"mode":"normal","artists":["chilichill"],"keywords":[]}
 "来点周杰伦 安静一点的"→{"mode":"normal","artists":["周杰伦"],"keywords":["安静","钢琴"]}
 "想听没收藏过的歌"→{"mode":"discover","artists":[],"keywords":["小众宝藏","冷门佳作"]}
-"放我收藏里的歌"→{"mode":"favorite","artists":[],"keywords":[]}`, { maxTokens: 440, temperature: 0.6 })
+"放我收藏里的歌"→{"mode":"favorite","artists":[],"keywords":[]}
+"再安静一点的"（上次在听周杰伦）→{"mode":"normal","artists":["周杰伦"],"keywords":["安静"]}`, { maxTokens: 440, temperature: 0.6 })
     const m = raw.match(/\{[\s\S]*\}/)
     if (!m) throw new Error('no json')
     const j = JSON.parse(m[0])
@@ -266,7 +324,7 @@ export async function interpretRequest(text, taste = {}) {
     // 先洗再判空：模型偶发 [""]/[null] 会让 length 判断误以为"有结果"而绕过本地兜底
     const aiArtists = (Array.isArray(j.artists) ? j.artists : []).map(x => String(x || '').trim()).filter(Boolean)
     const aiKeywords = (Array.isArray(j.keywords) ? j.keywords : []).map(x => String(x || '').trim()).filter(Boolean)
-    return {
+    const result = {
       mode: ['discover', 'favorite', 'normal'].includes(j.mode) ? j.mode : local.mode,
       artists: aiArtists.length ? aiArtists : local.artists,
       // AI 点名了歌手且没给词 → 尊重"只点歌手"的空数组；AI 全空才回退本地
@@ -274,8 +332,10 @@ export async function interpretRequest(text, taste = {}) {
       mood_name: j.mood_name || local.mood_name,
       dj_intro: j.dj_intro || local.dj_intro,
     }
+    return prev ? mergeContinuation(prev, result, text) : result   // 多轮续接（AI 已带 prev 上下文，这里再兜底一层）
   } catch {
-    return localInterpret(text)   // 限流/失败 → 本地解析，照样能识别意图与歌手
+    const local = localInterpret(text)   // 限流/失败 → 本地解析，照样能识别意图与歌手
+    return prev ? mergeContinuation(prev, local, text) : local
   }
 }
 

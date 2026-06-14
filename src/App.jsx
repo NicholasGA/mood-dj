@@ -9,7 +9,7 @@ import NicheDock from './components/NicheDock'
 import NowPlayingBento from './components/NowPlayingBento'
 import Icon from './components/Icon'
 import { searchTracks, getSongUrl, getLyric, searchPlaylists, getPlaylistTracks, searchByArtist, canonicalArtist } from './services/qqMusicApi'
-import { analyzeMood, generateStory, curateTracks, interpretRequest, recommendSongs, localInterpret, configureLLM, hasLLMKey, analyzeTaste, generatePersona, configurePersona, getPersona } from './services/claudeDJ'
+import { analyzeMood, generateStory, curateTracks, interpretRequest, recommendSongs, localInterpret, steerEnergyDelta, configureLLM, hasLLMKey, analyzeTaste, generatePersona, configurePersona, getPersona } from './services/claudeDJ'
 import { localStory, localMoodConfig, memoryNote } from './services/djText'
 import { localPersona, vibeReaction } from './services/djPersona'
 import { recordVisit, sessionGreeting } from './services/sessionMemory'
@@ -735,8 +735,12 @@ export default function App() {
 
       if (allTracks.length === 0) throw new Error('未找到匹配曲目，请换个描述')
 
-      // 存电台上下文，供无限补歌 + 实时调味复用（disliked 用记忆里的歌手种子）
-      radioRef.current = { queries, playlistIds, seen, energy, valence, disliked: dislikedSet, excludeFav: wantDiscover }
+      // 存电台上下文，供无限补歌 + 实时调味复用（disliked 用记忆里的歌手种子）；
+      // lastIntent 给多轮续接打底（开台后第一句"再安静点"也能接住正主与方向）
+      radioRef.current = {
+        queries, playlistIds, seen, energy, valence, disliked: dislikedSet, excludeFav: wantDiscover,
+        lastIntent: { mode: wantDiscover ? 'discover' : wantFavorite ? 'favorite' : 'normal', artists: preArtist ? [preArtist] : (pre.artists || []), keywords: config.search_queries || [] },
+      }
 
       // AI 精排：按心情 + 你的口味挑选排序；失败则回退随机洗牌
       // 探索时不传"常听歌手"（否则又被口味拉回熟歌）；点名歌手时正主就是口味
@@ -982,14 +986,21 @@ export default function App() {
     const t = (text || '').trim()
     if (!t || !radioRef.current) return
     const ctx = radioRef.current
-    const E = ctx.energy ?? 0.5, V = ctx.valence ?? 0.5
     setLoadingTrack(true)
     showToast('🎙️ 在帮你换…')
     try {
       let intent
       const tasteHint = { genres: tasteProfile?.genres, artists: [...new Set([...(favRef.current?.topArtists || []), ...likedArtists()])] }
-      try { intent = await interpretRequest(t, tasteHint) }
+      // 带上上一次意图 → "再来点这种但更安静的"能接住正主与方向
+      try { intent = await interpretRequest(t, tasteHint, ctx.lastIntent || null) }
       catch { intent = { mode: 'normal', artists: [], keywords: [t], mood_name: t.slice(0, 6) || '点歌', dj_intro: '好嘞，换个味道~' } }
+      // 能量/情绪增量（"更安静/更嗨"）：仅当这次是在上次主角上做修饰（没换新歌手/歌名）时才叠加，
+      // 避免用户点名含"快/慢/甜/伤"字样的歌名/歌手时被误调。
+      const prevArtists = ctx.lastIntent?.artists || []
+      const carriedPrev = JSON.stringify(intent.artists || []) === JSON.stringify(prevArtists)
+      const { dE, dV } = carriedPrev ? steerEnergyDelta(t) : { dE: 0, dV: 0 }
+      const E = Math.max(0, Math.min(1, (ctx.energy ?? 0.5) + dE))
+      const V = Math.max(0, Math.min(1, (ctx.valence ?? 0.5) + dV))
       const discover = intent.mode === 'discover'   // 想听没听过的 → 排除已知歌、翻深页挖新
       const favorite = intent.mode === 'favorite'   // 想听我收藏的 → 从我喜欢里捞
 
@@ -1066,6 +1077,8 @@ export default function App() {
       queueRef.current = merged; setQueue(merged)
       ctx.excludeFav = discover   // 建池成功才翻转（早翻的话空池早退会把旧电台的补歌误切成探索过滤）
       ctx.queries = [...(intent.keywords || []), ...artistList]   // 后续补歌也带上
+      ctx.energy = E; ctx.valence = V                            // 能量/情绪增量留存，下次续接在此基础上叠
+      ctx.lastIntent = { mode: intent.mode, artists: artistList, keywords: intent.keywords || [] }  // 供下一句"再来点这种"承接
       showToast(artistList.length ? `🎙️ 来点${artistList[0]}` : '🎙️ 换好了，下一首给你')
     } finally { setLoadingTrack(false) }
   }
