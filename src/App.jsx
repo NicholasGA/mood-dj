@@ -1048,9 +1048,19 @@ export default function App() {
           : t
         try { add(await resolveRecommended(await recommendSongs(req, tasteHint, { n: 12, discover, avoid }))) } catch {}
       }
-      // 关键词 → 曲风/心情搜索；探索时翻更深页，避开人人都听过的口水热门
-      const kwPage = () => discover ? 3 + Math.floor(Math.random() * 8) : 1 + Math.floor(Math.random() * 3)
-      ;(await Promise.allSettled((intent.keywords || []).map(q => searchTracks(qqCookiesRef.current, q, 15, kwPage())))).forEach(r => r.status === 'fulfilled' && add(r.value))
+      // 关键词搜索：有点名歌手时把关键词定向到正主（"周杰伦 安静"），别用裸关键词拉一堆别人的歌；
+      // 也翻不同页避开上一轮已进 seen 的同款。探索时翻更深页避口水热门。
+      const kwPage = () => discover ? 3 + Math.floor(Math.random() * 8) : 1 + Math.floor(Math.random() * 4)
+      const kwQueries = artistList.length
+        ? (intent.keywords || []).flatMap(q => artistList.slice(0, 2).map(a => `${a} ${q}`))
+        : (intent.keywords || [])
+      ;(await Promise.allSettled(kwQueries.map(q => searchTracks(qqCookiesRef.current, q, 15, kwPage())))).forEach(r => r.status === 'fulfilled' && add(r.value))
+      // 兜底：点名歌手但池子被 seen 滤空（重复点同一歌手很常见）→ 翻深页再捞正主，保证有得放
+      if (!pool.length && artistList.length) {
+        for (const ar of artistList.slice(0, 2)) {
+          ;(await Promise.allSettled([2, 3, 4, 5].map(p => searchByArtist(qqCookiesRef.current, ar, 20, p)))).forEach(r => r.status === 'fulfilled' && add(r.value))
+        }
+      }
       // 没点歌手时，搜歌单补充变化（探索时专挑冷门/宝藏歌单）
       if (!artistList.length && !favorite) {
         try {

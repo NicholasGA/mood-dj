@@ -201,6 +201,12 @@ describe('多轮对话点歌：isContinuation / mergeContinuation', () => {
     expect(r.artists).toEqual(['周杰伦'])
     expect(r.keywords).toContain('安静')
   })
+  it('续接残词不进 keywords（"再安静一"被滤，只留干净的"安静"）', () => {
+    const cur = { mode: 'normal', artists: ['再安静一'], keywords: ['再安静一'] }
+    const r = mergeContinuation(prev, cur, '再安静一点的')
+    expect(r.keywords).toEqual(['安静'])           // 不含"再安静一"
+    expect(r.artists).toEqual(['周杰伦'])
+  })
   it('点名含修饰字的歌名"快乐崇拜" → 非续接、原样保留', () => {
     const cur = { mode: 'normal', artists: ['快乐崇拜'], keywords: [] }
     expect(isContinuation('想听快乐崇拜', cur)).toBe(false)

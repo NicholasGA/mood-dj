@@ -287,8 +287,9 @@ export function mergeContinuation(prev, cur, text) {
   // 只有"纯修饰续接句"（没换主角、没给新方向）才继承上次歌手；否则尊重这次的新方向，别锁死旧正主
   const artists = curArtists.length ? curArtists : (newDirection ? [] : (prev.artists || []))
   const mode = (cur.mode && cur.mode !== 'normal') ? cur.mode : (prev.mode || 'normal')
-  // 有新修饰/新词 → 用新的（"更安静"覆盖旧"嗨"避免矛盾）；纯"再来点这种" → 沿用上次方向
-  const fresh = dedupeArr([...mods.keywords, ...curKw])
+  // 有新修饰/新词 → 用新的（"更安静"覆盖旧"嗨"避免矛盾）；纯"再来点这种" → 沿用上次方向。
+  // 滤掉本地把续接残词当成的关键词（"再安静一"），别带进搜索。
+  const fresh = dedupeArr([...mods.keywords, ...curKw.filter(k => !junk(k))])
   const keywords = fresh.length ? fresh : (prev.keywords || [])
   return { mode, artists, keywords, mood_name: cur.mood_name || prev.mood_name, dj_intro: cur.dj_intro }
 }
