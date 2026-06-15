@@ -9,7 +9,7 @@ import NicheDock from './components/NicheDock'
 import NowPlayingBento from './components/NowPlayingBento'
 import Icon from './components/Icon'
 import { searchTracks, getSongUrl, getLyric, searchPlaylists, getPlaylistTracks, searchByArtist, canonicalArtist } from './services/qqMusicApi'
-import { analyzeMood, generateStory, curateTracks, interpretRequest, recommendSongs, localInterpret, steerEnergyDelta, configureLLM, hasLLMKey, analyzeTaste, generatePersona, configurePersona, getPersona } from './services/claudeDJ'
+import { analyzeMood, generateStory, curateTracks, interpretRequest, recommendSongs, localInterpret, steerEnergyDelta, extractMods, configureLLM, hasLLMKey, analyzeTaste, generatePersona, configurePersona, getPersona } from './services/claudeDJ'
 import { localStory, localMoodConfig, memoryNote } from './services/djText'
 import { localPersona, vibeReaction } from './services/djPersona'
 import { recordVisit, sessionGreeting } from './services/sessionMemory'
@@ -80,6 +80,8 @@ export default function App() {
   const audioCtxRef = useRef(null)
   const analyserRef = useRef(null)
   const radioRef = useRef(null)        // 当前电台上下文：{ queries, playlistIds, seen }，用于无限补歌
+  // dev 活体调试钩子（仅开发期，生产构建剥离）：配合 global.__dev 驱动/读取电台状态验证推荐逻辑
+  if (import.meta.env.DEV) Object.assign(window, { __radioRef: radioRef, __queueRef: queueRef, __startRadio: (t, e, v) => startRadio(t, e, v), __steerRadio: (s) => steerRadio(s), __replenish: () => replenishQueue() })
   const replenishPromiseRef = useRef(null)   // 进行中的补歌 promise（合并并发调用，避免竞态）
   const favMidsRef = useRef(new Set())       // favMids 的 ref 镜像（供补歌等回调读最新值）
   const favRef = useRef(null)          // 用户收藏：{ playlistIds, topArtists, sample, favCount }
@@ -994,6 +996,13 @@ export default function App() {
       // 带上上一次意图 → "再来点这种但更安静的"能接住正主与方向
       try { intent = await interpretRequest(t, tasteHint, ctx.lastIntent || null) }
       catch { intent = { mode: 'normal', artists: [], keywords: [t], mood_name: t.slice(0, 6) || '点歌', dj_intro: '好嘞，换个味道~' } }
+      // 点名歌手台上的"细化"：说"没听过的/安静点/嗨一点"这类没点新歌手的话 → 继续听这位本人
+      // （他没听过的 / 他安静的），别跳到别人。只有点了新歌手、或换了新曲风(normal+无修饰)才离开正主。
+      const refining = intent.mode !== 'normal' || extractMods(t).keywords.length > 0
+      if (ctx.pinArtist && !(intent.artists && intent.artists.length) && refining) {
+        intent.artists = [ctx.pinArtist]
+        if (intent.mode === 'discover' && !extractMods(t).keywords.length) intent.keywords = []   // 他没听过的：别拿 discover 填充词当方向
+      }
       // 能量/情绪增量（"更安静/更嗨"）：仅当这次是在上次主角上做修饰（没换新歌手/歌名）时才叠加，
       // 避免用户点名含"快/慢/甜/伤"字样的歌名/歌手时被误调。
       const prevArtists = ctx.lastIntent?.artists || []
