@@ -675,8 +675,10 @@ export default function App() {
       }
 
       let config
+      // 普通心情台：让 analyzeMood 顺带产出推荐歌(withSongs)，省掉单独 recommendSongs 一次调用(开台 3→2)
+      const mergeSongs = !wantDiscover && !wantFavorite && !preArtist
       try {
-        config = await analyzeMood(moodText, energy, valence, 'qq')
+        config = await analyzeMood(moodText, energy, valence, 'qq', mergeSongs)
       } catch {
         config = localMoodConfig(moodText)   // AI 不可用：按关键词本地兜底，比通用歌单更贴心情
       }
@@ -720,8 +722,14 @@ export default function App() {
           if (memoryRef.current.likedTracks.length) add(memoryRef.current.likedTracks.slice(-30))
         }
         try {
-          const avoid = wantDiscover ? (memoryRef.current.history || []).slice(0, 30).map(h => `${h.name}-${(h.artists || []).map(a => a.name).join('/')}`) : []
-          const recs = await recommendSongs(moodText, { genres: tasteProfile?.genres, artists: taste }, { n: 14, discover: wantDiscover, avoid })
+          let recs
+          if (wantDiscover) {
+            const avoid = (memoryRef.current.history || []).slice(0, 30).map(h => `${h.name}-${(h.artists || []).map(a => a.name).join('/')}`)
+            recs = await recommendSongs(moodText, { genres: tasteProfile?.genres, artists: taste }, { n: 14, discover: true, avoid })
+          } else {
+            // 普通心情：优先用 analyzeMood 已合并出的 songs（省一次调用）；缺了才退回单独 recommend
+            recs = (config.songs && config.songs.length) ? config.songs : await recommendSongs(moodText, { genres: tasteProfile?.genres, artists: taste }, { n: 14 })
+          }
           add(await resolveRecommended(recs))
         } catch {}
         ok(await Promise.allSettled(queries.map(q => searchTracks(qqCookiesRef.current, q, 15, 2 + Math.floor(Math.random() * 6)))))

@@ -159,7 +159,8 @@ async function gemini(system, userMsg, { maxTokens = 600, temperature = 0.9, kin
   throw new Error(sawRateLimit ? 'all keys rate-limited' : 'llm failed')
 }
 
-export async function analyzeMood(text, energy, valence, platform = 'qq') {
+// withSongs：合并出 ~12 首具体推荐歌，省掉单独的 recommendSongs 调用（开台 3 调用→2，省 token/配额）
+export async function analyzeMood(text, energy, valence, platform = 'qq', withSongs = false) {
   const isQQ = platform === 'qq'
   const lang = isQQ ? '中文（QQ音乐里真实会搜的关键词）' : '英文'
   const system = withPersona(`你是资深音乐编辑和情绪分析师，懂各种曲风/年代/场景。只输出JSON，不要任何其他文字。其中 dj_intro 要用你这个 DJ 一贯的口吻。`)
@@ -186,12 +187,15 @@ export async function analyzeMood(text, energy, valence, platform = 'qq') {
   "color_primary": "#十六进制(贴合情绪：暖色=积极/亮色=高能/冷暗色=低落)",
   "color_secondary": "#十六进制(与主色协调)",
   "mood_emoji": "单个emoji",
-  "dj_intro": "一句话DJ开场白，必须≤25个汉字，热情有个性，呼应该心情（务必简短，只一句）"
-}`, { maxTokens: 700, temperature: 0.55 })
+  "dj_intro": "一句话DJ开场白，必须≤25个汉字，热情有个性，呼应该心情（务必简短，只一句）"${withSongs ? `,
+  "songs": [{"name":"准确歌名","artist":"主要歌手"}, …约12首]` : ''}
+}${withSongs ? '\nsongs：像资深歌单编辑那样，给约 12 首真实存在、契合该心情与能量的具体歌曲——情绪与能量一致(别忽冷忽热)、像一张同主题精选集，宁缺毋滥。' : ''}`, { maxTokens: withSongs ? 950 : 600, temperature: 0.55 })
 
   const match = raw.match(/\{[\s\S]*\}/)
   if (!match) throw new Error('Mood analysis failed')
   const cfg = JSON.parse(match[0])
+  // 归一 songs（合并模式）：过滤无名条目
+  if (withSongs) cfg.songs = (Array.isArray(cfg.songs) ? cfg.songs : []).filter(x => x?.name).map(x => ({ name: String(x.name).trim(), artist: String(x.artist || '').trim() }))
   // flash-lite 有时不守长度，兜底截到第一句、最多30字
   if (cfg.dj_intro && cfg.dj_intro.length > 30) {
     cfg.dj_intro = cfg.dj_intro.split(/[。！!?？\n]/)[0].slice(0, 30)
@@ -370,7 +374,7 @@ ${tasteLine}${avoidLine}像优质歌单/乐评人那样，推荐 ${n} 首真实�
 
 // AI 精排：从候选池里按心情/能量/情绪挑选并排序，剔除不搭的歌；favArtists 偏向用户口味
 export async function curateTracks(tracks, moodConfig, energy, valence, favArtists = []) {
-  const pool = tracks.slice(0, 45)
+  const pool = tracks.slice(0, 28)   // 28 足够精排出 15-25 首，又比 45 省近四成输入 token
   if (pool.length < 6) return tracks  // 池子太小没必要精排
   const numbered = pool
     .map((t, i) => `${i + 1}. ${t.name} - ${t.artists?.map(a => a.name).join('/') || '未知'}`)
