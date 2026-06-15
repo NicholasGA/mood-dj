@@ -1022,10 +1022,13 @@ export default function App() {
           if (canon && !confirmed.includes(canon)) confirmed.push(canon)
         } catch {}
       }
+      // 没实锤的"歌手"很可能是曲风词（民谣/摇滚/燃 快节奏）——退回当关键词全文搜，别拿去 searchByArtist(搜不到→空池)
+      const unconfirmed = (intent.artists || []).filter(a => !confirmed.some(c => c.toLowerCase() === String(a).toLowerCase()))
+      if (unconfirmed.length) intent.keywords = [...new Set([...(intent.keywords || []), ...unconfirmed])]
       // 台名保留限定词（"周杰伦·安静"），别把「但要安静的」洗成泛正主台
-      if (confirmed.length) intent.mood_name = (intent.keywords?.length ? `${confirmed[0]}·${intent.keywords[0]}` : confirmed.join('、')).slice(0, 12)
+      if (confirmed.length) intent.mood_name = (intent.keywords?.length && intent.keywords[0] !== confirmed[0] ? `${confirmed[0]}·${intent.keywords[0]}` : confirmed.join('、')).slice(0, 12)
       // 既没实锤歌手又没词（AI 把整句吞了）→ 退回全文搜索，保证有产出
-      if (!intent.artists?.length && !intent.keywords?.length && !favorite && !discover) intent.keywords = [t]
+      if (!confirmed.length && !intent.keywords?.length && !favorite && !discover) intent.keywords = [t]
 
       // 只改名字/回应，配色保留（不突兀）
       setMoodConfig(m => ({ ...(m || {}), mood_name: intent.mood_name, mood_emoji: m?.mood_emoji || '🎙️', dj_intro: intent.dj_intro, energy: E }))
@@ -1037,10 +1040,10 @@ export default function App() {
       const known = discover ? buildKnownMids(favMids, memoryRef.current.recentMids, memoryRef.current.likedTracks) : null
       const add = (arr) => { for (const x of arr || []) if (x?.mid && !ctx.seen.has(x.mid) && !disliked(x) && !(known && known.has(x.mid))) { ctx.seen.add(x.mid); pool.push(x) } }
 
-      // 点名歌手 → 本人的歌先灌池（实锤后多翻一页，让池子以正主为主，心情词只是点缀）
-      const artistList = confirmed.length ? confirmed : (intent.artists || [])
+      // 点名歌手 → 本人的歌先灌池（只用实锤过的，没实锤的已退回关键词，不会拿曲风词来 searchByArtist 搜空）
+      const artistList = confirmed
       for (const ar of artistList.slice(0, 3)) {
-        const pages = confirmed.length ? [1, 2, 3] : [1, 2]
+        const pages = [1, 2, 3]
         ;(await Promise.allSettled(pages.map(p => searchByArtist(qqCookiesRef.current, ar, 20, p)))).forEach(r => r.status === 'fulfilled' && add(r.value))
       }
 
