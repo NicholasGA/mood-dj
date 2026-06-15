@@ -231,7 +231,8 @@ export function localInterpret(text) {
   const latin = /^[A-Za-z0-9 .&'-]+$/.test(artist)
   const artists = (artist && (latin ? artist.length <= 20 : (artist.length <= 10 && !/[，,\s]/.test(artist)))) ? [artist] : []
   let keywords = (mood ? [mood] : (artist ? [artist] : [])).filter(Boolean)
-  if (!keywords.length) keywords = discover ? ['小众 华语', '宝藏 冷门', '好听 新发现'] : (favorite || !raw) ? [] : [raw]
+  // discover 默认词用真实曲风（别用"宝藏/冷门/好听"这类模糊词——会全文搜出喜马拉雅播客/合辑等非歌曲）
+  if (!keywords.length) keywords = discover ? ['独立音乐', '民谣', '华语新声'] : (favorite || !raw) ? [] : [raw]
   const mode = discover ? 'discover' : favorite ? 'favorite' : 'normal'
   const dj_intro = discover ? '行，挖几首你没听过的~' : favorite ? '回你的收藏里转转~' : '好嘞，换个味道~'
   return { mode, artists, keywords, mood_name: (artist || mood || (discover ? '探索新歌' : favorite ? '我的收藏' : raw)).slice(0, 6) || '点歌', dj_intro }
@@ -319,7 +320,7 @@ export async function interpretRequest(text, taste = {}, prev = null) {
 示例：
 "我想听chilichill的歌"→{"mode":"normal","artists":["chilichill"],"keywords":[]}
 "来点周杰伦 安静一点的"→{"mode":"normal","artists":["周杰伦"],"keywords":["安静","钢琴"]}
-"想听没收藏过的歌"→{"mode":"discover","artists":[],"keywords":["小众宝藏","冷门佳作"]}
+"想听没收藏过的歌"→{"mode":"discover","artists":[],"keywords":["独立音乐","民谣"]}（discover 的 keywords 用真实曲风，别用"宝藏/冷门"等模糊词）
 "放我收藏里的歌"→{"mode":"favorite","artists":[],"keywords":[]}
 "再安静一点的"（上次在听周杰伦）→{"mode":"normal","artists":["周杰伦"],"keywords":["安静"]}`, { maxTokens: 440, temperature: 0.6 })
     const m = raw.match(/\{[\s\S]*\}/)

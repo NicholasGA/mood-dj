@@ -1,5 +1,24 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { parseLRC, detectChoruses, mapSong, getUin, searchTracks, searchByArtist, canonicalArtist } from '../src/services/qqMusicApi'
+import { parseLRC, detectChoruses, mapSong, getUin, searchTracks, searchByArtist, canonicalArtist, isNonMusic } from '../src/services/qqMusicApi'
+
+describe('isNonMusic（滤掉有声书/播客/广播剧——"放出来好多不是歌"）', () => {
+  const s = (name, artist) => ({ mid: 'x', name, singer: [{ name: artist }] })
+  it('喜马拉雅等平台 + 章节/有声 标题 → 判为非歌曲', () => {
+    expect(isNonMusic(s('第5章 箴言能力的新发现', '喜马拉雅'))).toBe(true)
+    expect(isNonMusic(s('第252集 有点小众的癖好', '余良'))).toBe(true)
+    expect(isNonMusic(s('某某广播剧 第一期', '某工作室'))).toBe(true)
+    expect(isNonMusic(s('三国演义 评书', '单田芳'))).toBe(true)
+  })
+  it('正常歌曲 → 不误伤', () => {
+    expect(isNonMusic(s('晴天', '周杰伦'))).toBe(false)
+    expect(isNonMusic(s('勾指起誓', 'ChiliChill'))).toBe(false)
+    expect(isNonMusic(s('七里香', '周杰伦'))).toBe(false)
+  })
+  it('mapSong 对非歌曲返回 null（被 .filter(Boolean) 滤除）', () => {
+    expect(mapSong(s('第10章 开端', '喜马拉雅'))).toBe(null)
+    expect(mapSong({ mid: 'm', name: '晴天', singer: [{ name: '周杰伦' }] })).not.toBe(null)
+  })
+})
 
 describe('canonicalArtist（歌手实锤：搜索结果验明候选词是不是真歌手）', () => {
   const tr = (name, ...singers) => ({ name, artists: singers.map(n => ({ name: n })) })

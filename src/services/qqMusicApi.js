@@ -16,9 +16,20 @@ const HEADERS = (cookies) => ({
   'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
 })
 
+// 非歌曲过滤：QQ音乐里混着喜马拉雅等有声书/播客/广播剧，模糊搜索词("小众宝藏/冷门")常把它们搜出来，
+// 表现为"放出来好多不是歌"。按 来源平台 + 章节/有声 标题特征 识别（纯函数，可单测）。
+const NON_MUSIC_ARTIST = /喜马拉雅|懒人听书|蜻蜓FM|阅文|有声|说书|讲书|评书/i
+const NON_MUSIC_NAME = /第\s*[\d零一二三四五六七八九十百千两]+\s*[章集回话讲]|广播剧|有声书|有声小说|说书|讲书|评书|相声|脱口秀|播客|电台节目|完整版未删减/
+export function isNonMusic(s) {
+  const name = s?.name || s?.songname || ''
+  const artist = (s?.singer || []).map(a => a?.name || '').join('/')
+  return NON_MUSIC_ARTIST.test(artist) || NON_MUSIC_NAME.test(name)
+}
+
 // QQ 歌曲对象 → 统一 track 形状（搜索/歌单通用）
 export function mapSong(s) {
   if (!s?.mid) return null
+  if (isNonMusic(s)) return null   // 滤掉有声书/播客等非歌曲
   return {
     id: String(s.id ?? s.mid),
     mid: s.mid,

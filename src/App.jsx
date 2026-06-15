@@ -1062,7 +1062,7 @@ export default function App() {
         const kwPage = () => discover ? 3 + Math.floor(Math.random() * 8) : 1 + Math.floor(Math.random() * 4)
         ;(await Promise.allSettled((intent.keywords || []).map(q => searchTracks(qqCookiesRef.current, q, 15, kwPage())))).forEach(r => r.status === 'fulfilled' && add(r.value))
         try {
-          const plQ = discover ? '小众 冷门 宝藏 私藏' : (intent.keywords?.[0] || t)
+          const plQ = discover ? (intent.keywords?.[0] || '独立 华语') : (intent.keywords?.[0] || t)
           const pls = await searchPlaylists(qqCookiesRef.current, plQ, 8)
           const ids = pls.slice(0, discover ? 3 : 2).map(p => p.id)
           ctx.playlistIds.push(...ids.filter(id => !ctx.playlistIds.includes(id)))
