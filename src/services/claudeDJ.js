@@ -187,7 +187,7 @@ export async function analyzeMood(text, energy, valence, platform = 'qq') {
   "color_secondary": "#十六进制(与主色协调)",
   "mood_emoji": "单个emoji",
   "dj_intro": "一句话DJ开场白，必须≤25个汉字，热情有个性，呼应该心情（务必简短，只一句）"
-}`, { maxTokens: 700 })
+}`, { maxTokens: 700, temperature: 0.55 })
 
   const match = raw.match(/\{[\s\S]*\}/)
   if (!match) throw new Error('Mood analysis failed')
