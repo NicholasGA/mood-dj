@@ -1,5 +1,37 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { splitKeys, localInterpret, configureLLM, hasLLMKey, usesBuiltinAI, interpretRequest, extractMods, steerEnergyDelta, isContinuation, mergeContinuation, evalBudget, sanitizeHex } from '../src/services/claudeDJ'
+import { splitKeys, localInterpret, configureLLM, hasLLMKey, usesBuiltinAI, interpretRequest, extractMods, steerEnergyDelta, isContinuation, mergeContinuation, evalBudget, sanitizeHex, safeParse, repairTruncatedJSON } from '../src/services/claudeDJ'
+
+describe('safeParse / repairTruncatedJSON（抗截断 JSON，flash-lite 输出超长被截）', () => {
+  it('正常 JSON 直接解析', () => {
+    expect(safeParse('{"a":1,"b":[2,3]}')).toEqual({ a: 1, b: [2, 3] })
+    expect(safeParse('前面废话 [{"name":"x"}] 后面')).toEqual([{ name: 'x' }])
+  })
+  it('截断在歌名字符串中间 → 丢掉半个、保留前面完整的', () => {
+    const raw = '{"mood_name":"放松","songs":[{"name":"晴天","artist":"周杰伦"},{"name":"枫","artist":"周杰伦"},{"name":"半岛铁'
+    const r = safeParse(raw)
+    expect(r.mood_name).toBe('放松')
+    expect(r.songs).toEqual([{ name: '晴天', artist: '周杰伦' }, { name: '枫', artist: '周杰伦' }])
+  })
+  it('截断在数组元素之间 → 补齐闭合', () => {
+    const raw = '[{"name":"a"},{"name":"b"},'
+    expect(safeParse(raw)).toEqual([{ name: 'a' }, { name: 'b' }])
+  })
+  it('截断在对象字段后（缺右括号）→ 补齐', () => {
+    expect(safeParse('{"order":[1,2,3,4,5]')).toEqual({ order: [1, 2, 3, 4, 5] })
+  })
+  it('字符串里的括号/转义不误判', () => {
+    expect(safeParse('{"t":"a}b]c","n":1}')).toEqual({ t: 'a}b]c', n: 1 })
+    expect(safeParse('{"t":"引号\\"内","n":2}')).toEqual({ t: '引号"内', n: 2 })
+  })
+  it('无可解析内容 → null', () => {
+    expect(safeParse('完全不是json')).toBe(null)
+    expect(safeParse('')).toBe(null)
+    expect(safeParse(null)).toBe(null)
+  })
+  it('repairTruncatedJSON 保留到最后一个完整值并补括号', () => {
+    expect(repairTruncatedJSON('{"a":[1,2,{"x":3}')).toBe('{"a":[1,2,{"x":3}]}')
+  })
+})
 
 describe('sanitizeHex（校验模型给的颜色，挡住 NaN 流进 canvas）', () => {
   it('合法 6 位 / 3 位都规整成 #rrggbb 小写', () => {

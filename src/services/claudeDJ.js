@@ -191,9 +191,8 @@ export async function analyzeMood(text, energy, valence, platform = 'qq', withSo
   "songs": [{"name":"准确歌名","artist":"主要歌手"}, …约12首]` : ''}
 }${withSongs ? '\nsongs：像资深歌单编辑那样，给约 12 首真实存在、契合该心情与能量的具体歌曲——情绪与能量一致(别忽冷忽热)、像一张同主题精选集，宁缺毋滥。' : ''}`, { maxTokens: withSongs ? 950 : 600, temperature: 0.55 })
 
-  const match = raw.match(/\{[\s\S]*\}/)
-  if (!match) throw new Error('Mood analysis failed')
-  const cfg = JSON.parse(match[0])
+  const cfg = safeParse(raw)
+  if (!cfg) throw new Error('Mood analysis failed')
   // 归一 songs（合并模式）：过滤无名条目
   if (withSongs) cfg.songs = (Array.isArray(cfg.songs) ? cfg.songs : []).filter(x => x?.name).map(x => ({ name: String(x.name).trim(), artist: String(x.artist || '').trim() }))
   // flash-lite 有时不守长度，兜底截到第一句、最多30字
@@ -212,6 +211,40 @@ export function sanitizeHex(hex, fallback = '#31c27c') {
   let m = hex.trim().replace(/^#/, '')
   if (/^[0-9a-fA-F]{3}$/.test(m)) m = m.split('').map(c => c + c).join('')
   return /^[0-9a-fA-F]{6}$/.test(m) ? `#${m.toLowerCase()}` : fallback
+}
+
+// 修复被截断的 JSON（flash-lite 输出超 maxTokens 常截在歌名/数组中间）：
+// 扫描到「最后一个完整值」处截断，再把未闭合的 { [ 补齐。纯函数。
+export function repairTruncatedJSON(s) {
+  const str = String(s || '')
+  const stack = []          // 仍未闭合的括号对应的闭合符
+  let inStr = false, esc = false, lastGood = -1, lastGoodStack = null
+  for (let i = 0; i < str.length; i++) {
+    const ch = str[i]
+    if (inStr) {
+      if (esc) esc = false
+      else if (ch === '\\') esc = true
+      else if (ch === '"') inStr = false
+      continue
+    }
+    if (ch === '"') inStr = true
+    else if (ch === '{') stack.push('}')
+    else if (ch === '[') stack.push(']')
+    else if (ch === '}' || ch === ']') { stack.pop(); lastGood = i; lastGoodStack = stack.slice() }
+  }
+  if (lastGood < 0) return str
+  return str.slice(0, lastGood + 1) + (lastGoodStack || []).slice().reverse().join('')
+}
+
+// 从 LLM 原文里稳健提取 JSON（对象或数组）：先贪婪直解，失败再修复截断。返回 parse 结果或 null。纯函数。
+export function safeParse(raw) {
+  if (!raw || typeof raw !== 'string') return null
+  const start = raw.search(/[{[]/)
+  if (start < 0) return null
+  const body = raw.slice(start)
+  const greedy = body.match(/[\s\S]*[}\]]/)
+  if (greedy) { try { return JSON.parse(greedy[0]) } catch {} }
+  try { return JSON.parse(repairTruncatedJSON(body)) } catch { return null }
 }
 
 // 本地意图解析（不依赖 AI）：识别意图 mode（探索/收藏/普通）+ 剥指令/意图词 + 拆歌手与心情
@@ -327,9 +360,8 @@ export async function interpretRequest(text, taste = {}, prev = null) {
 "想听没收藏过的歌"→{"mode":"discover","artists":[],"keywords":["独立音乐","民谣"]}（discover 的 keywords 用真实曲风，别用"宝藏/冷门"等模糊词）
 "放我收藏里的歌"→{"mode":"favorite","artists":[],"keywords":[]}
 "再安静一点的"（上次在听周杰伦）→{"mode":"normal","artists":["周杰伦"],"keywords":["安静"]}`, { maxTokens: 440, temperature: 0.6 })
-    const m = raw.match(/\{[\s\S]*\}/)
-    if (!m) throw new Error('no json')
-    const j = JSON.parse(m[0])
+    const j = safeParse(raw)
+    if (!j) throw new Error('no json')
     const local = localInterpret(text)
     // 先洗再判空：模型偶发 [""]/[null] 会让 length 判断误以为"有结果"而绕过本地兜底
     const aiArtists = (Array.isArray(j.artists) ? j.artists : []).map(x => String(x || '').trim()).filter(Boolean)
@@ -366,9 +398,8 @@ export async function recommendSongs(request, taste = {}, opts = {}) {
 需求/心情："${request}"
 ${tasteLine}${avoidLine}像优质歌单/乐评人那样，推荐 ${n} 首真实存在、契合上面需求与口味的具体歌曲。要点：**情绪与能量要一致**——像一张精心编排的同主题精选集，风格相近、不要忽冷忽热（别在伤感里掺欢快、别在安静里掺嗨曲）；注重品味与契合度，宁缺毋滥。${discoverLine}
 只返回JSON数组：[{"name":"准确歌名","artist":"主要歌手"}, …]`, { maxTokens: 800, temperature: 0.85 })
-  const m = raw.match(/\[[\s\S]*\]/)
-  if (!m) throw new Error('recommend failed')
-  const arr = JSON.parse(m[0])
+  const arr = safeParse(raw)
+  if (!Array.isArray(arr)) throw new Error('recommend failed')
   return arr.filter(x => x?.name).map(x => ({ name: String(x.name).trim(), artist: String(x.artist || '').trim() })).slice(0, n)
 }
 
@@ -396,9 +427,7 @@ ${numbered}
 - 宁缺毋滥：少而精也别为凑数放进跑偏的歌；尽量 15-25 首，不够也没关系。
 返回JSON：{"order":[编号,编号,...]}`, { maxTokens: 900, temperature: 0.5 })
 
-  const m = raw.match(/\{[\s\S]*\}/)
-  if (!m) throw new Error('curate failed')
-  const order = JSON.parse(m[0]).order
+  const order = safeParse(raw)?.order
   if (!Array.isArray(order) || order.length < 5) throw new Error('curate too few')
 
   const picked = [], seen = new Set()
@@ -428,9 +457,8 @@ ${list}
   "artists": ["最常出现的歌手2-4个"],
   "explore": "一句话建议接下来可以挖什么(≤24字)"
 }`, { maxTokens: 500, temperature: 0.85 })
-  const m = raw.match(/\{[\s\S]*\}/)
-  if (!m) throw new Error('taste failed')
-  const j = JSON.parse(m[0])
+  const j = safeParse(raw)
+  if (!j) throw new Error('taste failed')
   return { personality: j.personality || '', genres: j.genres || [], moods: j.moods || [], artists: j.artists || [], explore: j.explore || '' }
 }
 
@@ -453,9 +481,8 @@ export async function generatePersona(taste = {}) {
   "sign": "口头禅/收尾语(≤10字)",
   "emoji": "单个emoji"
 }`, { maxTokens: 300, temperature: 0.9, kind: 'story' })
-    const mm = raw.match(/\{[\s\S]*\}/)
-    if (!mm) throw new Error('persona failed')
-    const j = JSON.parse(mm[0])
+    const j = safeParse(raw)
+    if (!j) throw new Error('persona failed')
     if (!j.name) throw new Error('no name')
     return { name: String(j.name).slice(0, 8), vibe: (j.vibe || '').slice(0, 40), sign: (j.sign || '').slice(0, 12), emoji: j.emoji || '🎧', source: 'ai' }
   } catch {
