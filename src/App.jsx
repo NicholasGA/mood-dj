@@ -675,16 +675,18 @@ export default function App() {
       }
 
       let config
-      // 普通心情台：让 analyzeMood 顺带产出推荐歌(withSongs)，省掉单独 recommendSongs 一次调用(开台 3→2)
+      // 点名歌手台/收藏台不需要 AI 心情分析（只放本人/收藏，心情词与推荐歌都用不上、台名颜色也被覆盖）→
+      // 直接本地配置，开台 0 次 Gemini 调用。普通心情台才调 analyzeMood，并顺带产出推荐歌(withSongs)省一次。
       const mergeSongs = !wantDiscover && !wantFavorite && !preArtist
-      try {
-        config = await analyzeMood(moodText, energy, valence, 'qq', mergeSongs)
-      } catch {
-        config = localMoodConfig(moodText)   // AI 不可用：按关键词本地兜底，比通用歌单更贴心情
+      if (preArtist || wantFavorite) {
+        config = localMoodConfig(moodText)
+      } else {
+        try { config = await analyzeMood(moodText, energy, valence, 'qq', mergeSongs) }
+        catch { config = localMoodConfig(moodText) }   // AI 不可用：本地兜底
       }
       config.energy = energy  // 供 Visualizer 用（analyzeMood 不回传 energy）
       config.valence = valence  // 供「心情」bento 块显示情绪值
-      if (preArtist) config.mood_name = preArtist.slice(0, 12)   // 点名歌手 → 台名就是正主
+      if (preArtist) { config.mood_name = preArtist.slice(0, 12); config.dj_intro = `来，听听 ${preArtist}` }   // 点名歌手 → 台名/串场就是正主
       if (wantFavorite) { config.mood_name = pre.mood_name; config.dj_intro = pre.dj_intro }  // 收藏台：台名/串场别用误读的心情
       setMoodConfig(config)
       setAnnouncement(config.dj_intro)
@@ -749,13 +751,13 @@ export default function App() {
         lastIntent: { mode: wantDiscover ? 'discover' : wantFavorite ? 'favorite' : 'normal', artists: preArtist ? [preArtist] : (pre.artists || []), keywords: config.search_queries || [] },
       }
 
-      // AI 精排：按心情 + 你的口味挑选排序；失败则回退随机洗牌
-      // 探索时不传"常听歌手"（否则又被口味拉回熟歌）；点名歌手时正主就是口味
-      const curateTaste = preArtist ? [preArtist] : (wantDiscover ? [] : taste)
-      try {
-        shuffled = await curateTracks(allTracks, config, energy, valence, curateTaste)
-      } catch {
+      // 点名歌手台/收藏台不按心情精排（要的就是本人/收藏的随机感，心情精排对它们没意义）→ 随机洗牌，再省一次 AI 调用。
+      // 心情/探索台才 AI 精排：探索不传"常听歌手"（免被口味拉回熟歌）。
+      if (preArtist || wantFavorite) {
         shuffled = allTracks.sort(() => Math.random() - 0.5)
+      } else {
+        try { shuffled = await curateTracks(allTracks, config, energy, valence, wantDiscover ? [] : taste) }
+        catch { shuffled = allTracks.sort(() => Math.random() - 0.5) }
       }
       // 新鲜度/多样性：去最近放过的 + 限每位歌手数量（过滤到太短会自动退回，不清空）
       // 点名歌手时不限同歌手数量（正主就该多）；探索时用"已知歌"全集去重
