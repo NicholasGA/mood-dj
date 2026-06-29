@@ -504,6 +504,9 @@ export default function App() {
     if (!ctx) return Promise.resolve(0)
     if (replenishPromiseRef.current) return replenishPromiseRef.current   // 复用进行中的，避免竞态
     const run = async () => {
+      // 长会话防 seen 无界增长：攒太多会把所有搜索结果都滤光→电台越补越空、反复重听兜底。
+      // 封顶后丢掉最早的(Set 保插入序)，很久前的歌可循环回来；最近 1800 首仍去重，不会立刻重复。
+      if (ctx.seen.size > 2500) ctx.seen = new Set([...ctx.seen].slice(-1800))
       const fresh = []
       const add = radioAdd(ctx, fresh)
       if (ctx.pinArtist) {
