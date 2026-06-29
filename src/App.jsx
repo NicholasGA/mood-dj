@@ -11,8 +11,8 @@ import Icon from './components/Icon'
 import { searchTracks, getSongUrl, getLyric, searchPlaylists, getPlaylistTracks, searchByArtist, canonicalArtist } from './services/qqMusicApi'
 import { analyzeMood, generateStory, curateTracks, interpretRequest, recommendSongs, localInterpret, steerEnergyDelta, extractMods, configureLLM, hasLLMKey, analyzeTaste, generatePersona, configurePersona, getPersona } from './services/claudeDJ'
 import { localStory, localMoodConfig, memoryNote } from './services/djText'
-import { localPersona, vibeReaction } from './services/djPersona'
-import { recordVisit, sessionGreeting } from './services/sessionMemory'
+import { localPersona, vibeReaction, timeOfDay } from './services/djPersona'
+import { recordVisit, sessionGreeting, proactiveNote } from './services/sessionMemory'
 import { effectiveVolume, clampVol } from './services/audioVolume'
 import { glassSoft } from './ui/surface'
 import { freshen, pushRecent, removeAt, moveToFront, pushHistory, buildKnownMids } from './services/radio'
@@ -94,6 +94,9 @@ export default function App() {
     if (now - lastMemSaveRef.current > 30000) { lastMemSaveRef.current = now; saveMemory() }
   }, [saveMemory])
   const lastSpokeRef = useRef(0)         // 上次语音播报时间（节流，文字每首都显示）
+  const sessionPlayRef = useRef(0)       // 本次会话已播第几首（主动播报用）
+  const lastProactiveRef = useRef(0)     // 上次主动播报在第几首（节流，至少隔 4 首）
+  const prevSlotRef = useRef(null)       // 上一首所处时段（检测会话中跨入深夜）
   const [djSpeak, setDjSpeak] = useState(false)   // 本次播报是否出声
 
   // 音量唯一真源：用户音量(userVolRef) × DJ 说话压低(duckRef)。改音量随时生效、
@@ -442,10 +445,20 @@ export default function App() {
   }, [djMemoryNote])
 
   const showDJ = useCallback((next) => {
-    // 立刻显示：有缓存的歌词故事就用，否则本地兜底——保证每首都有一句（AI 故事由下面副作用异步补上）
-    const line = djLine(next, memoryRef.current.songStories?.[next.mid] || localStory(next))
-    const speak = Date.now() - lastSpokeRef.current > 45000   // 语音节流：≥45s 才出声
-    if (speak) lastSpokeRef.current = Date.now()
+    // 会话播放计数（本次开 app 起，用于"听到第N首"+ 主动播报节流）
+    sessionPlayRef.current += 1
+    const now = Date.now()
+    // 主动播报（零 API，本地）：连播同歌手/里程碑/入夜时插一句"它在陪你听"的点评，
+    // 至少隔 4 首、且最近没出过 → 替代这首的常规播报；否则照常显示记忆点名+歌词故事。
+    const slot = timeOfDay(new Date(now)).slot
+    const proactive = (sessionPlayRef.current - lastProactiveRef.current >= 4)
+      ? proactiveNote({ track: next, history: memoryRef.current.history || [], sessionCount: sessionPlayRef.current, persona: getPersona() || {}, now, prevSlot: prevSlotRef.current })
+      : ''
+    prevSlotRef.current = slot
+    const line = proactive || djLine(next, memoryRef.current.songStories?.[next.mid] || localStory(next))
+    if (proactive) lastProactiveRef.current = sessionPlayRef.current
+    const speak = now - lastSpokeRef.current > 45000   // 语音节流：≥45s 才出声
+    if (speak) lastSpokeRef.current = now
     setDjSpeak(speak)
     setAnnouncement(line)
     setShowAnnouncement(true)

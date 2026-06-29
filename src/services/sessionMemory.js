@@ -78,3 +78,26 @@ export function sessionGreeting(persona, now = Date.now(), mem = {}) {
   // 6) 其余交给基础问候（首次自我介绍 / 一般回归）
   return { line: greeting(persona, now, lastSeen), celebrate: 0 }
 }
+
+// 主动播报（零 API）：听的过程中据收听规律插一句 DJ 点评，让"听的当下"也像有人陪。无可说返回 ''。
+// 条件本身就稀疏(连播 exactly 4/8 首、每 20 首、会话中跨入深夜)，调用方再加节流即可，不打扰。
+// ctx: { track(当前这首), history(之前的，新→旧), sessionCount(本次会话已播第几首), persona, now, prevSlot(上一首所处时段) }
+export function proactiveNote(ctx = {}) {
+  const { track, history = [], sessionCount = 0, persona = {}, now = Date.now(), prevSlot = null } = ctx
+  // 1) 会话中跨入深夜——最有"它在陪着我"的氛围
+  const slot = timeOfDay(new Date(now)).slot
+  if (prevSlot && prevSlot !== 'lateNight' && slot === 'lateNight') return '不知不觉到深夜了，把声音放轻些，慢慢听'
+  // 2) 连续同一歌手（只在恰好第 4/8 首时说一次，避免每首都念叨）
+  const a = track?.artists?.[0]?.name
+  if (a) {
+    let streak = 1
+    for (const h of history) { if ((h.artists?.[0]?.name) === a) streak++; else break }
+    if (streak === 4 || streak === 8) return `连着第 ${streak} 首 ${a} 了，今天是 ${a} 的专场`
+  }
+  // 3) 会话里程碑（每 20 首，自带间隔）
+  if (sessionCount > 0 && sessionCount % 20 === 0) {
+    const sign = persona.sign ? `，${persona.sign}` : ''
+    return `不知不觉陪你听到第 ${sessionCount} 首了${sign}`
+  }
+  return ''
+}

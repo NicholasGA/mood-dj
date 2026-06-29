@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { recordVisit, visitStats, dueMilestone, sessionGreeting } from '../src/services/sessionMemory'
+import { recordVisit, visitStats, dueMilestone, sessionGreeting, proactiveNote } from '../src/services/sessionMemory'
 
 const DAY = 86400000
 // 固定一个时间锚点便于推演：2026-01-15（周四）20:00（晚上时段）
@@ -75,5 +75,36 @@ describe('sessionGreeting（跨会话记忆问候）', () => {
     expect(r.line).toContain('阿声')
     expect(r.line).not.toContain('\n')
     expect(r.celebrate).toBe(0)
+  })
+})
+
+describe('proactiveNote（主动播报，零 API）', () => {
+  const jay = { artists: [{ name: '周杰伦' }] }
+  const other = { artists: [{ name: '林俊杰' }] }
+  const noon = new Date(2026, 0, 15, 12, 0, 0).getTime()
+  const night = new Date(2026, 0, 15, 1, 0, 0).getTime()
+
+  it('连播恰好第 4 首同歌手 → 专场点评；第 3/5 首不说', () => {
+    const hist3 = [jay, jay, jay]   // 之前 3 首都是周杰伦 + 当前这首 = 第 4 首
+    expect(proactiveNote({ track: jay, history: hist3, sessionCount: 4, now: noon, prevSlot: 'noon' }).includes('周杰伦')).toBe(true)
+    expect(proactiveNote({ track: jay, history: [jay, jay], sessionCount: 3, now: noon, prevSlot: 'noon' })).toBe('')
+    expect(proactiveNote({ track: jay, history: [jay, jay, jay, jay], sessionCount: 5, now: noon, prevSlot: 'noon' })).toBe('')
+  })
+  it('换了歌手不算连播', () => {
+    expect(proactiveNote({ track: other, history: [jay, jay, jay], sessionCount: 4, now: noon, prevSlot: 'noon' })).toBe('')
+  })
+  it('会话中跨入深夜 → 提示放轻', () => {
+    expect(proactiveNote({ track: other, history: [], sessionCount: 7, now: night, prevSlot: 'evening' })).toContain('深夜')
+  })
+  it('已在深夜（prevSlot 也是深夜）→ 不重复提示', () => {
+    expect(proactiveNote({ track: other, history: [], sessionCount: 7, now: night, prevSlot: 'lateNight' })).toBe('')
+  })
+  it('每 20 首里程碑 + 人格口头禅', () => {
+    const r = proactiveNote({ track: other, history: [], sessionCount: 20, persona: { sign: '夜还长。' }, now: noon, prevSlot: 'noon' })
+    expect(r).toContain('20')
+    expect(r).toContain('夜还长')
+  })
+  it('平平无奇的一首 → 不说话（不打扰）', () => {
+    expect(proactiveNote({ track: other, history: [jay], sessionCount: 7, now: noon, prevSlot: 'noon' })).toBe('')
   })
 })
